@@ -28,8 +28,8 @@ jobs:
     
     - name: Build and push Docker images
       run: |
-        docker-compose -f docker-compose.yml build
-        docker-compose -f docker-compose.yml push
+        docker compose -f docker-compose.yml build
+        docker compose -f docker-compose.yml push
     
     - name: Deploy to staging
       uses: azure/k8s-deploy@v4
