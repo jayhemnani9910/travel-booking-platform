@@ -457,8 +457,8 @@ services:
 
   external-adapters:
     build:
-      context: ./apps/external-adapters
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/external-adapters/Dockerfile
     ports:
       - "8010:8010"
     environment:
