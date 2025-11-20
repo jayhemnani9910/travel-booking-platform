@@ -326,8 +326,8 @@ services:
 
   concierge-svc:
     build:
-      context: ./apps/concierge-svc
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/concierge-svc/Dockerfile
     ports:
       - "8007:8007"
     environment:
@@ -363,8 +363,8 @@ services:
 
   deals-worker:
     build:
-      context: ./apps/deals-worker
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/deals-worker/Dockerfile
     restart: always
     ports:
       - "8008:8008"
@@ -457,8 +457,8 @@ services:
 
   external-adapters:
     build:
-      context: ./apps/external-adapters
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/external-adapters/Dockerfile
     ports:
       - "8010:8010"
     environment:
@@ -484,8 +484,8 @@ services:
 
   client:
     build:
-      context: ./apps/client
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./apps/client/Dockerfile
       args:
         VITE_API_URL: http://localhost:8000
         VITE_WS_URL: ws://localhost:8007
