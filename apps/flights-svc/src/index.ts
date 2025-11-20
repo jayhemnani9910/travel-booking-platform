@@ -15,8 +15,8 @@ import {
   generateTraceId 
 } from '@kayak/shared';
 
-class FlightsService {
-  private app: express.Application;
+export class FlightsService {
+  public app: express.Application;
   private db!: mysql.Pool;
   private redis: any;
   private port: number = 8002;
@@ -562,6 +562,8 @@ class FlightsService {
   }
 }
 
-// Start the service
-const flightsService = new FlightsService();
-flightsService.start();
+// Start the service only if executed directly
+if (require.main === module) {
+  const flightsService = new FlightsService();
+  flightsService.start();
+}
