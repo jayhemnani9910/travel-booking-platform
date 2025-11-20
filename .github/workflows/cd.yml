@@ -42,7 +42,9 @@ jobs:
       uses: azure/k8s-deploy@v4
       with:
         manifests: |
-          infra/k8s/*.yaml
+          infra/k8s/api-gateway-deployment.yaml
+          infra/k8s/api-gateway-service.yaml
+          infra/k8s/microservices.yaml
         images: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
         namespace: staging
