@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test:health": "curl --fail http://localhost:8000/health || exit 1"
   },
   "dependencies": {
     "@kayak/shared": "1.0.0",
