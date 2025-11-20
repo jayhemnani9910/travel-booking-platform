@@ -59,7 +59,10 @@ jobs:
     - name: Run integration tests
       run: npm run test:integration
       env:
-        DATABASE_URL: mysql://root:testroot@localhost:3306/kayak_test
+        DB_HOST: localhost
+        DB_USER: root
+        DB_PASSWORD: testroot
+        DB_NAME: kayak_test
         REDIS_URL: redis://localhost:6379
         NODE_ENV: test
     
