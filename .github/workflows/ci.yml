@@ -92,8 +92,8 @@ jobs:
       run: |
         npm ci
         npm run build:shared
-        cd apps/notification-svc && npm run build
-        cd apps/external-adapters && npm run build
+        (cd apps/notification-svc && npm run build)
+        (cd apps/external-adapters && npm run build)
 
     - name: Build Docker images
       run: |
