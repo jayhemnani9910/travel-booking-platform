@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import request from 'supertest';
-import express from 'express';
+import { FlightsService } from '../index';
 
 describe('Flights Service Integration Tests', () => {
-  let app: express.Application;
+  let app: any;
   
-  beforeEach(() => {
-    app = express();
-    app.use(express.json());
-  });
+  // Initialize app once
+  const service = new FlightsService();
+  app = service.app;
 
+  
   describe('POST /flights/search', () => {
     it('should search flights successfully', async () => {
       const searchParams = {
