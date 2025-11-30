@@ -30,6 +30,13 @@ preview.html
 test-debug.js
 *.tmp
 
+# Large datasets / vendor data
+data/raw/
+data/raw.zip
+data/**/*.csv
+dataset/
+*.zip
+
 # Test caches
 .pytest_cache/
 coverage-final.json
