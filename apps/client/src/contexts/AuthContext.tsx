@@ -9,6 +9,19 @@ export interface User {
     role: 'user' | 'admin';
 }
 
+const isDemoMode = (import.meta.env.VITE_DEMO_MODE as string | undefined)?.toLowerCase() === 'true';
+
+const demoUser: User = {
+    id: 'demo-user',
+    email: 'demo@kayak.local',
+    firstName: 'Demo',
+    lastName: 'User',
+    role: 'user',
+};
+
+const demoAccessToken = 'demo-access-token';
+const demoRefreshToken = 'demo-refresh-token';
+
 interface AuthContextType {
     user: User | null;
     token: string | null;
@@ -27,7 +40,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check local storage on load
+        // Demo-mode: auto-seed a fake session so the UI is usable on GitHub Pages.
+        if (isDemoMode) {
+            const storedToken = localStorage.getItem('accessToken');
+            const storedUser = localStorage.getItem('user');
+
+            if (storedToken && storedUser) {
+                setToken(storedToken);
+                try {
+                    setUser(JSON.parse(storedUser));
+                } catch {
+                    setUser(demoUser);
+                }
+            } else {
+                setToken(demoAccessToken);
+                setUser(demoUser);
+                localStorage.setItem('accessToken', demoAccessToken);
+                localStorage.setItem('refreshToken', demoRefreshToken);
+                localStorage.setItem('user', JSON.stringify(demoUser));
+            }
+
+            setLoading(false);
+            return;
+        }
+
+        // Normal mode: check local storage on load
         const storedToken = localStorage.getItem('accessToken');
         const storedUser = localStorage.getItem('user');
         if (storedToken && storedUser) {

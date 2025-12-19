@@ -1,6 +1,8 @@
 import React, { createContext, useState, useEffect, useRef } from 'react';
 type SocketLike = WebSocket;
 
+const isDemoMode = (import.meta.env.VITE_DEMO_MODE as string | undefined)?.toLowerCase() === 'true';
+
 interface SocketContextType {
   socket: SocketLike | null;
   isConnected: boolean;
@@ -24,6 +26,11 @@ export function SocketProvider({ children }: SocketProviderProps) {
   const reconnectAttempts = useRef(0);
 
   useEffect(() => {
+    // Demo-mode: skip WS entirely (GitHub Pages has no backend).
+    if (isDemoMode) {
+      return;
+    }
+
     let ws: SocketLike | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let active = true;
