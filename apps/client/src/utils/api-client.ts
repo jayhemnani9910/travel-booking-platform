@@ -317,15 +317,30 @@ const demoAdapter: AxiosAdapter = async (config) => {
     return okData(config, { flights });
   }
 
-  if (/^\/api\/flights\/.+/.test(path) && method === 'get') {
-    const id = path.split('/').pop() || makeId('flt');
-    return okData(config, {
-      flight: {
-        id,
+  if (/^\/api\/flights\/route\/[^/]+\/[^/]+$/i.test(path) && method === 'get') {
+    const parts = path.split('/');
+    const origin = (parts[4] || 'SFO').toUpperCase();
+    const destination = (parts[5] || 'LAX').toUpperCase();
+    const flights = [
+      {
+        id: makeId('flt'),
+        airline: 'United',
+        flightNumber: 'UA 118',
+        origin,
+        destination,
+        departureTime: '2026-01-15T11:10:00',
+        arrivalTime: '2026-01-15T13:10:00',
+        duration: 120,
+        stops: 0,
+        price: 219,
+        cabinClass: 'Economy',
+      },
+      {
+        id: makeId('flt'),
         airline: 'Delta',
         flightNumber: 'DL 421',
-        origin: 'SFO',
-        destination: 'LAX',
+        origin,
+        destination,
         departureTime: '2026-01-15T08:20:00',
         arrivalTime: '2026-01-15T10:01:00',
         duration: 101,
@@ -333,6 +348,25 @@ const demoAdapter: AxiosAdapter = async (config) => {
         price: 189,
         cabinClass: 'Economy',
       },
+    ];
+
+    return okData(config, { flights });
+  }
+
+  if (/^\/api\/flights\/[^/]+$/i.test(path) && method === 'get') {
+    const id = path.split('/').pop() || makeId('flt');
+    return okData(config, {
+      id,
+      airline: 'Delta',
+      flightNumber: 'DL 421',
+      origin: 'SFO',
+      destination: 'LAX',
+      departureTime: '2026-01-15T08:20:00',
+      arrivalTime: '2026-01-15T10:01:00',
+      duration: 101,
+      stops: 0,
+      price: 189,
+      cabinClass: 'Economy',
     });
   }
 
@@ -379,6 +413,22 @@ const demoAdapter: AxiosAdapter = async (config) => {
     ];
 
     return okData(config, { hotels });
+  }
+
+  if (/^\/api\/hotels\/[^/]+$/i.test(path) && method === 'get') {
+    const id = path.split('/').pop() || makeId('htl');
+    return okData(config, {
+      id,
+      name: 'Harborview Hotel',
+      destination: 'San Francisco',
+      neighborhood: 'Downtown',
+      starRating: 4,
+      reviewScore: 9.1,
+      reviewsCount: 1240,
+      pricePerNight: 179,
+      address: '100 Market St, San Francisco, CA',
+      amenities: ['WiFi', 'Gym', 'Breakfast'],
+    });
   }
 
   // Cars
