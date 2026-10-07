@@ -104,6 +104,9 @@ export class FlightsService {
     if (!bookingId) {
       return res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'bookingId is required' } });
     }
+    if (!Number.isInteger(seats) || seats < 1) {
+      return res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'seats must be a positive integer' } });
+    }
 
     const conn = await this.db.getConnection();
     try {
@@ -228,8 +231,12 @@ export class FlightsService {
         });
       }
 
-      // Try cache first
-      const cacheKey = `flights_search:${JSON.stringify(searchParams)}`;
+      const page = Math.max(Math.floor(Number(req.query.page)) || 1, 1);
+      const limit = Math.min(Math.max(Math.floor(Number(req.query.limit)) || 20, 1), 100);
+      const offset = (page - 1) * limit;
+
+      // Try cache first (page/limit come from the query string, even for POST)
+      const cacheKey = `flights_search:${JSON.stringify(searchParams)}:${page}:${limit}`;
       if (this.redis && (this.redis as any).isReady) {
         const cached = await this.redis.get(cacheKey);
         if (cached) {
@@ -280,23 +287,20 @@ export class FlightsService {
         whereClause += ' AND duration_minutes <= 360'; // 6 hours threshold for direct flights
       }
 
-      if (searchParams.airlines && searchParams.airlines.length > 0) {
-        whereClause += ` AND airline IN (${searchParams.airlines.map(() => '?').join(',')})`;
-        params.push(...searchParams.airlines);
+      // A single GET ?airlines=X arrives as a string, not an array
+      const airlines = ([] as string[]).concat(searchParams.airlines ?? []);
+      if (airlines.length > 0) {
+        whereClause += ` AND airline IN (${airlines.map(() => '?').join(',')})`;
+        params.push(...airlines);
       }
-
-      const page = Number(req.query.page) || 1;
-      const limit = Math.min(Number(req.query.limit) || 20, 100);
-      const offset = (page - 1) * limit;
 
       const sql = `
         SELECT * FROM flights
         ${whereClause}
         ORDER BY departure_time ASC
-        LIMIT ? OFFSET ?
+        LIMIT ${limit} OFFSET ${offset}
       `;
 
-      params.push(limit, offset);
       const [rows] = await this.db.execute(sql, params);
       const flights = rows as any[];
 
@@ -531,8 +535,9 @@ export class FlightsService {
 
   private startReservationCleanupJob() {
     setInterval(async () => {
+      let conn: mysql.PoolConnection | undefined;
       try {
-        const conn = await this.db.getConnection();
+        conn = await this.db.getConnection();
         await conn.beginTransaction();
 
         // Find expired pending reservations
@@ -543,10 +548,12 @@ export class FlightsService {
         `);
 
         for (const res of expired as any[]) {
-          await conn.execute(
-            'UPDATE flight_reservations SET status = ? WHERE id = ?',
+          // Re-check status so a concurrent confirm/cancel (or another replica) cannot release twice
+          const [result] = await conn.execute(
+            "UPDATE flight_reservations SET status = ? WHERE id = ? AND status = 'pending'",
             ['expired', res.id]
           );
+          if ((result as any).affectedRows !== 1) continue;
           await conn.execute(
             'UPDATE flights SET available_seats = available_seats + ? WHERE id = ?',
             [res.seats, res.flight_id]
@@ -554,13 +561,15 @@ export class FlightsService {
         }
 
         await conn.commit();
-        conn.release();
 
         if ((expired as any[]).length > 0) {
           console.log(`[CLEANUP] Expired ${(expired as any[]).length} flight reservations`);
         }
       } catch (error) {
+        if (conn) await conn.rollback().catch(() => {});
         console.error('[CLEANUP] Reservation cleanup error:', error);
+      } finally {
+        conn?.release();
       }
     }, 60000); // Run every minute
   }

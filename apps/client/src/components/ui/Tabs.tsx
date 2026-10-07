@@ -27,7 +27,7 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, defaultTab, onChange }) => {
     <div className="w-full">
       {/* Tab Headers */}
       <div className="border-b border-gray-200">
-        <nav className="flex space-x-8" aria-label="Tabs">
+        <nav className="flex space-x-8 overflow-x-auto" aria-label="Tabs">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -35,7 +35,7 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, defaultTab, onChange }) => {
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={`
-                  flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors
+                  flex items-center py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors
                   ${isActive
                     ? 'border-brand text-brand'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

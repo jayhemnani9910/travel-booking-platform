@@ -656,7 +656,10 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config as AnyAxiosConfig;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // A 401 from the refresh call itself must not trigger another refresh
+    const isRefreshCall = originalRequest?.url === '/api/auth/refresh';
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isRefreshCall) {
       originalRequest._retry = true;
 
       try {
@@ -686,44 +689,5 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-// API endpoints
-export const api = {
-  // Auth
-  login: (credentials: { email: string; password: string }) =>
-    apiClient.post('/auth/login', credentials),
-  
-  register: (userData: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-  }) => apiClient.post('/auth/register', userData),
-
-  // Flights
-  searchFlights: (params: any) =>
-    apiClient.post('/flights/search', params),
-  
-  getFlight: (id: string) =>
-    apiClient.get(`/flights/${id}`),
-
-  // Bookings
-  createBooking: (bookingData: any) =>
-    apiClient.post('/bookings', bookingData),
-  
-  getUserBookings: () =>
-    apiClient.get('/bookings'),
-
-  // Payments
-  createPaymentIntent: (amount: number, currency: string) =>
-    apiClient.post('/payments/intent', { amount, currency }),
-
-  // User
-  getUserProfile: () =>
-    apiClient.get('/users/profile'),
-  
-  updateUserProfile: (data: any) =>
-    apiClient.put('/users/profile', data),
-};
 
 export default apiClient;

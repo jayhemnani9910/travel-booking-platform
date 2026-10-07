@@ -81,6 +81,9 @@ export class HotelsService {
     if (!bookingId) {
       return res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'bookingId is required' } });
     }
+    if (!Number.isInteger(rooms) || rooms < 1) {
+      return res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'rooms must be a positive integer' } });
+    }
 
     const conn = await this.db.getConnection();
     try {
@@ -207,7 +210,12 @@ export class HotelsService {
         });
       }
 
-      const cacheKey = `hotels_search:${JSON.stringify(searchParams)}`;
+      const page = Math.max(Math.floor(Number(req.query.page)) || 1, 1);
+      const limit = Math.min(Math.max(Math.floor(Number(req.query.limit)) || 20, 1), 100);
+      const offset = (page - 1) * limit;
+
+      // page/limit come from the query string, even for POST
+      const cacheKey = `hotels_search:${JSON.stringify(searchParams)}:${page}:${limit}`;
       if (this.redis && (this.redis as any).isReady) {
         const cached = await this.redis.get(cacheKey);
         if (cached) {
@@ -219,7 +227,7 @@ export class HotelsService {
         }
       }
 
-      let whereClause = 'WHERE hr.available = 1';
+      let whereClause = 'WHERE hr.available = 1 AND hr.available_rooms > 0';
       const params: any[] = [];
 
       if (searchParams.destination) {
@@ -239,14 +247,12 @@ export class HotelsService {
         params.push(searchParams.maxPrice);
       }
 
-      if (searchParams.starRating && searchParams.starRating.length > 0) {
-        whereClause += ` AND h.star_rating IN (${searchParams.starRating.map(() => '?').join(',')})`;
-        params.push(...searchParams.starRating);
+      // A single GET ?starRating=X arrives as a string, not an array
+      const starRating = ([] as any[]).concat(searchParams.starRating ?? []);
+      if (starRating.length > 0) {
+        whereClause += ` AND h.star_rating IN (${starRating.map(() => '?').join(',')})`;
+        params.push(...starRating);
       }
-
-      const page = Number(req.query.page) || 1;
-      const limit = Math.min(Number(req.query.limit) || 20, 100);
-      const offset = (page - 1) * limit;
 
       const sql = `
          SELECT hr.id, hr.hotel_id, hr.type AS room_type, hr.description, hr.max_occupancy,
@@ -258,10 +264,9 @@ export class HotelsService {
         JOIN hotels h ON hr.hotel_id = h.id
         ${whereClause}
         ORDER BY h.star_rating DESC, hr.price_per_night ASC
-        LIMIT ? OFFSET ?
+        LIMIT ${limit} OFFSET ${offset}
       `;
 
-      params.push(limit, offset);
       const [rows] = await this.db.execute(sql, params);
       const hotels = rows as any[];
 
@@ -302,8 +307,13 @@ export class HotelsService {
     try {
       const { id } = req.params;
 
+      // Same aliases as searchHotels so formatHotelRoom gets the fields it reads
       const [rows] = await this.db.execute(`
-        SELECT hr.*, h.name, h.description, h.star_rating, h.address_city
+        SELECT hr.id, hr.hotel_id, hr.type AS room_type, hr.description, hr.max_occupancy,
+               hr.beds AS bed_type, hr.amenities, hr.price_per_night AS base_price,
+               hr.currency, hr.available, hr.images,
+               h.name, h.description AS hotel_description, h.star_rating,
+               CONCAT(h.address_city, ', ', h.address_state) AS address
         FROM hotel_rooms hr
         JOIN hotels h ON hr.hotel_id = h.id
         WHERE hr.id = ?
@@ -413,8 +423,9 @@ export class HotelsService {
 
   private startReservationCleanupJob() {
     setInterval(async () => {
+      let conn: mysql.PoolConnection | undefined;
       try {
-        const conn = await this.db.getConnection();
+        conn = await this.db.getConnection();
         await conn.beginTransaction();
 
         const [expired] = await conn.execute(`
@@ -424,24 +435,28 @@ export class HotelsService {
         `);
 
         for (const res of expired as any[]) {
-          await conn.execute(
-            'UPDATE hotel_reservations SET status = ? WHERE id = ?',
+          // Re-check status so a concurrent confirm/cancel (or another replica) cannot release twice
+          const [result] = await conn.execute(
+            "UPDATE hotel_reservations SET status = ? WHERE id = ? AND status = 'pending'",
             ['expired', res.id]
           );
+          if ((result as any).affectedRows !== 1) continue;
           await conn.execute(
-            'UPDATE hotel_rooms SET available = 1 WHERE id = ?',
+            'UPDATE hotel_rooms SET available_rooms = available_rooms + 1 WHERE id = ?',
             [res.room_id]
           );
         }
 
         await conn.commit();
-        conn.release();
 
         if ((expired as any[]).length > 0) {
           console.log(`[CLEANUP] Expired ${(expired as any[]).length} hotel reservations`);
         }
       } catch (error) {
+        if (conn) await conn.rollback().catch(() => {});
         console.error('[CLEANUP] Reservation cleanup error:', error);
+      } finally {
+        conn?.release();
       }
     }, 60000);
   }

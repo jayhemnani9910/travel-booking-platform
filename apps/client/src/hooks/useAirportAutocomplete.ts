@@ -71,9 +71,11 @@ export function useAirportAutocomplete(
 
       debounceTimerRef.current = setTimeout(async () => {
         try {
-          abortControllerRef.current = new AbortController();
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
 
-          const response = await airportsApi.suggest(trimmed, 8);
+          const response = await airportsApi.suggest(trimmed, 8, controller.signal);
+          if (controller.signal.aborted) return;
           const data = response.data?.data?.suggestions || [];
 
           setSuggestions(data);

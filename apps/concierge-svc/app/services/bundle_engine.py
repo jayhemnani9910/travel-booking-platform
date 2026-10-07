@@ -59,6 +59,14 @@ class BundleEngine:
 
         return float(min(100, budget_score + hotel_score + deal_bonus))
 
+    @staticmethod
+    def _deal_savings(deal) -> float:
+        # price.discount is a percentage, so take the dollar difference instead
+        price = deal.payload.get("price", {})
+        if "original" not in price or "deal" not in price:
+            return 0
+        return price["original"] - price["deal"]
+
     def _build_components(self, flight, hotel, car) -> list[BundleComponent]:
         hotel_total = hotel.price_per_night * hotel.nights
         car_total = car.daily_price * max(hotel.nights, 1)
@@ -114,12 +122,12 @@ class BundleEngine:
                         if deal.destination != request.destination:
                             continue
                         if deal.payload.get("type") == "hotel" and hotel.name.lower() in deal.summary.lower():
-                            savings += deal.payload.get("price", {}).get("discount", 0)
+                            savings += self._deal_savings(deal)
                             deal_bonus = max(deal_bonus, min(deal.score / 2, 25))
                             explanation = f"Hotel deal: {deal.summary}"
                             break
                         if deal.payload.get("type") == "flight" and flight.origin in deal.summary:
-                            savings += deal.payload.get("price", {}).get("discount", 0)
+                            savings += self._deal_savings(deal)
                             deal_bonus = max(deal_bonus, min(deal.score / 2, 25))
                             explanation = f"Flight deal: {deal.summary}"
                             break

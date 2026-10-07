@@ -3,9 +3,9 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Plane, Hotel, Car, Heart, User } from 'lucide-react';
 
 const productLinks = [
-  { to: '/search?type=flights', label: 'Flights', icon: Plane },
-  { to: '/search?type=hotels', label: 'Stays', icon: Hotel },
-  { to: '/search?type=cars', label: 'Cars', icon: Car },
+  { type: 'flights', label: 'Flights', icon: Plane },
+  { type: 'hotels', label: 'Stays', icon: Hotel },
+  { type: 'cars', label: 'Cars', icon: Car },
 ];
 
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,6 +13,9 @@ import { useAuth } from '../../contexts/AuthContext';
 export function Header() {
   const location = useLocation();
   const { user, logout } = useAuth();
+  // The search page shows flights unless ?type= says otherwise
+  const onSearchPage = location.pathname === '/' || location.pathname === '/search';
+  const activeType = new URLSearchParams(location.search).get('type') || 'flights';
 
   return (
     <header className="bg-white/90 backdrop-blur border-b border-gray-100 sticky top-0 z-20">
@@ -36,20 +39,18 @@ export function Header() {
           </div>
 
           <nav className="hidden md:flex items-center bg-gray-100 rounded-full p-1 text-sm">
-            {productLinks.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  `flex items-center px-4 py-1.5 rounded-full transition-colors ${isActive || location.search.includes(label.toLowerCase())
-                    ? 'bg-white shadow-sm text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
-                  }`
-                }
+            {productLinks.map(({ type, label, icon: Icon }) => (
+              <Link
+                key={type}
+                to={`/search?type=${type}`}
+                className={`flex items-center px-4 py-1.5 rounded-full transition-colors ${onSearchPage && activeType === type
+                  ? 'bg-white shadow-sm text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900'
+                  }`}
               >
                 <Icon className="w-4 h-4 mr-1.5" />
                 {label}
-              </NavLink>
+              </Link>
             ))}
             <NavLink
               to="/deals"

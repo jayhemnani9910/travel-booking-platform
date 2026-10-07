@@ -60,7 +60,8 @@ export class HotelDealConsumer {
          valid_until = VALUES(valid_until)`,
         [
           event.deal_id,
-          event.reference_id,
+          // reference_id is optional; mysql2 rejects undefined binds
+          event.reference_id ?? null,
           event.price.original,
           event.price.deal,
           event.price.discount,
@@ -85,7 +86,7 @@ export class HotelDealConsumer {
       // Pre-warm search cache for destination
       const [roomRows] = await this.db.execute(
         'SELECT h.address_city FROM hotel_rooms hr JOIN hotels h ON hr.hotel_id = h.id WHERE hr.id = ?',
-        [event.reference_id]
+        [event.reference_id ?? null]
       );
       
       if ((roomRows as any[]).length > 0) {
@@ -93,7 +94,7 @@ export class HotelDealConsumer {
         const searchKey = `hot_deals:hotels:${room.address_city}`;
         
         // Add to hot deals list
-        await this.redis.lpush(searchKey, JSON.stringify({
+        await this.redis.lPush(searchKey, JSON.stringify({
           roomId: event.reference_id,
           dealId: event.deal_id,
           price: event.price,

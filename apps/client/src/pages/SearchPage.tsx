@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plane, Hotel, Car, MapPin, Calendar, Users, TrendingUp, Loader2 } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { useAirportAutocomplete } from '../hooks/useAirportAutocomplete';
@@ -22,11 +22,17 @@ const POPULAR_DESTINATIONS = [
   { city: 'Chicago', code: 'ORD', image: '🏙️' }
 ];
 
+const TRAVEL_TYPES: TravelType[] = ['flights', 'hotels', 'cars'];
+
 export function SearchPage() {
-  const [travelType, setTravelType] = useState<TravelType>('flights');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const typeParam = searchParams.get('type') as TravelType | null;
+  const [travelType, setTravelType] = useState<TravelType>(
+    typeParam && TRAVEL_TYPES.includes(typeParam) ? typeParam : 'flights'
+  );
   const [formData, setFormData] = useState({
     origin: '',
-    destination: '',
+    destination: searchParams.get('destination') || '',
     departureDate: '',
     returnDate: '',
     passengers: 1,
@@ -41,6 +47,18 @@ export function SearchPage() {
   // Airport autocomplete hooks
   const originAutocomplete = useAirportAutocomplete();
   const destAutocomplete = useAirportAutocomplete();
+
+  // Follow the header's Flights/Stays/Cars links (?type=)
+  useEffect(() => {
+    if (typeParam && TRAVEL_TYPES.includes(typeParam)) {
+      setTravelType(typeParam);
+    }
+  }, [typeParam]);
+
+  const selectType = (type: TravelType) => {
+    setTravelType(type);
+    setSearchParams({ type }, { replace: true });
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('recentSearches');
@@ -333,16 +351,6 @@ export function SearchPage() {
               />
             </div>
             <div>
-              <label htmlFor="pickup-time" className="block text-sm font-medium text-gray-700 mb-1">Pickup Time</label>
-              <input
-                id="pickup-time"
-                type="time"
-                className="input"
-                defaultValue="10:00"
-                title="Select pickup time"
-              />
-            </div>
-            <div>
               <label htmlFor="return-date-car" className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
               <input
                 id="return-date-car"
@@ -352,23 +360,6 @@ export function SearchPage() {
                 onChange={(e) => setFormData({...formData, returnDate: e.target.value})}
                 title="Select return date"
               />
-            </div>
-            <div>
-              <label htmlFor="return-time" className="block text-sm font-medium text-gray-700 mb-1">Return Time</label>
-              <input
-                id="return-time"
-                type="time"
-                className="input"
-                defaultValue="10:00"
-                title="Select return time"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Driver Age</label>
-              <select className="input" title="Select driver age">
-                <option value="25">25+</option>
-                <option value="21">21-24</option>
-              </select>
             </div>
           </>
         );
@@ -382,7 +373,7 @@ export function SearchPage() {
       <div className="max-w-6xl mx-auto px-4 py-12">
         <div className="mb-8 text-center animate-fade-in">
           <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-3 text-shadow">
-            Search hundreds of travel sites at once
+            Search flights, stays and cars in one place
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Flights, stays, and car rentals in one place – compare deals and build your perfect trip.
@@ -393,7 +384,7 @@ export function SearchPage() {
           <div className="flex justify-center mb-6">
             <div className="bg-gray-100 p-1 rounded-full flex text-sm shadow-sm">
               <button
-                onClick={() => setTravelType('flights')}
+                onClick={() => selectType('flights')}
                 className={`flex items-center px-6 py-2.5 rounded-full transition-all duration-300 ${
                   travelType === 'flights' 
                     ? 'bg-white shadow-md text-gray-900 transform scale-105' 
@@ -404,7 +395,7 @@ export function SearchPage() {
                 Flights
               </button>
               <button
-                onClick={() => setTravelType('hotels')}
+                onClick={() => selectType('hotels')}
                 className={`flex items-center px-6 py-2.5 rounded-full transition-all duration-300 ${
                   travelType === 'hotels' 
                     ? 'bg-white shadow-md text-gray-900 transform scale-105' 
@@ -415,7 +406,7 @@ export function SearchPage() {
                 Hotels
               </button>
               <button
-                onClick={() => setTravelType('cars')}
+                onClick={() => selectType('cars')}
                 className={`flex items-center px-6 py-2.5 rounded-full transition-all duration-300 ${
                   travelType === 'cars' 
                     ? 'bg-white shadow-md text-gray-900 transform scale-105' 
@@ -451,7 +442,7 @@ export function SearchPage() {
                   hover
                   padding="sm"
                   onClick={() => {
-                    setTravelType(search.type);
+                    selectType(search.type);
                     setFormData({
                       ...formData,
                       origin: search.origin || '',

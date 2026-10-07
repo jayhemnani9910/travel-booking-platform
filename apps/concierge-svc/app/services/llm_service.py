@@ -146,9 +146,12 @@ JSON response:"""
                 destination = code
                 break
         
-        # Extract budget (patterns like $1000, 1000 dollars, etc.)
-        budget_match = re.search(r'\$?\s*(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:dollars?|usd)?', message_lower)
-        budget = float(budget_match.group(1).replace(',', '')) if budget_match else 1000.0
+        # Extract budget (patterns like $1000, 1000 dollars, etc.); a bare number is not a budget
+        budget_match = re.search(
+            r'\$\s*(\d+(?:,\d{3})*(?:\.\d{2})?)|(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:dollars?|usd)\b',
+            message_lower,
+        )
+        budget = float((budget_match.group(1) or budget_match.group(2)).replace(',', '')) if budget_match else 1000.0
         
         # Extract date hints
         departure_date = None
@@ -172,7 +175,7 @@ JSON response:"""
         }
         
         return {
-            "destination": destination or "LAX",
+            "destination": destination,
             "origin": None,
             "departure_date": departure_date,
             "return_date": departure_date + timedelta(days=3) if departure_date else None,

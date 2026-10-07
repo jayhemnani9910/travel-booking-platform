@@ -285,7 +285,7 @@ class AdminService {
             currency: row.currency,
             valid_until: new Date(row.valid_until),
             created_at: new Date(row.created_at),
-            tags: row.tags ? JSON.parse(row.tags) : [],
+            tags: row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags) : [],
             ai_score: Number(row.score ?? 0),
             conversion_rate: 0,
             revenue_impact: 0,
@@ -966,7 +966,7 @@ class AdminService {
         `;
         
         params.push(l, offset);
-        const [rows] = await this.db.execute(sql, params);
+        const [rows] = await this.db.query(sql, params);
         
         // Get total count
         const countSql = `SELECT COUNT(*) as total FROM payments p JOIN bookings b ON p.booking_id = b.id ${whereClause}`;

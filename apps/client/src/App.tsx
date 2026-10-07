@@ -21,38 +21,41 @@ import { FlightDetailsPage } from './pages/FlightDetailsPage';
 import { HotelDetailsPage } from './pages/HotelDetailsPage';
 
 import { AuthProvider } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 
 function App() {
   return (
     <AuthProvider>
-      <ToastProvider>
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-          <Header />
+      <SocketProvider>
+        <ToastProvider>
+          <div className="min-h-screen bg-gray-50 flex flex-col">
+            <Header />
 
-          <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<SearchPage />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/results/:type" element={<ResultsPage />} />
-              <Route path="/flights/:id" element={<FlightDetailsPage />} />
-              <Route path="/hotels/:id" element={<HotelDetailsPage />} />
-              <Route path="/booking/:type/:id" element={<BookingPage />} />
-              <Route path="/bookings" element={<BookingsPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/deals" element={<DealsPage />} />
-              <Route path="/concierge" element={<ConciergeChatPage />} />
-              <Route path="/admin/*" element={<AdminDashboard />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </main>
+            <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<SearchPage />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/results/:type" element={<ResultsPage />} />
+                <Route path="/flights/:id" element={<FlightDetailsPage />} />
+                <Route path="/hotels/:id" element={<HotelDetailsPage />} />
+                <Route path="/booking/:type/:id" element={<BookingPage />} />
+                <Route path="/bookings" element={<BookingsPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/deals" element={<DealsPage />} />
+                <Route path="/concierge" element={<ConciergeChatPage />} />
+                <Route path="/admin/*" element={<AdminDashboard />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </main>
 
-          <Footer />
-        </div>
-      </ToastProvider>
+            <Footer />
+          </div>
+        </ToastProvider>
+      </SocketProvider>
     </AuthProvider>
   );
 }

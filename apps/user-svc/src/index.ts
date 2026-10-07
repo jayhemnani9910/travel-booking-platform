@@ -415,12 +415,14 @@ class UserService {
         LIMIT ? OFFSET ?
       `;
 
-      params.push(Number(limit), offset);
+      // MySQL 8.0.22+ rejects numeric (DOUBLE) LIMIT/OFFSET binds from execute()
+      params.push(String(Number(limit)), String(offset));
 
       const [rows] = await this.db.execute(sql, params);
 
       const users = (rows as any[]).map(row => {
-        const parsedAddress = row.address ? JSON.parse(row.address) : undefined;
+        // JSON_OBJECT comes back already parsed by mysql2
+        const parsedAddress = row.address ? (typeof row.address === 'string' ? JSON.parse(row.address) : row.address) : undefined;
         const mapped: User = {
           id: row.id,
           email: row.email,

@@ -32,8 +32,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build:css": "tailwindcss -i ./src/index.css -o ./src/index.css --minify",
-    "build": "tsc && npm run build:css && vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "start": "vite"
   },

@@ -83,7 +83,8 @@ class DealCache:
     async def upsert_deal_event(self, event: DealEvent) -> None:
         async with self._session_factory() as session:
             db_deal = await session.get(CachedDeal, event.deal_id)
-            payload = event.model_dump()
+            # mode="json": valid_until is a datetime, which the JSON column cannot store.
+            payload = event.model_dump(mode="json")
             if db_deal:
                 db_deal.payload = payload
                 db_deal.score = event.score
@@ -138,14 +139,9 @@ class DealCache:
             if not watches:
                 return
 
-        deals = await self.top_deals()
-        deal_map: dict[str, list[CachedDeal]] = {}
-        for deal in deals:
-            deal_map.setdefault(deal.destination, []).append(deal)
-
         triggered: list[tuple[WatchRequest, CachedDeal]] = []
         for watch in watches:
-            for deal in deal_map.get(watch.destination, []):
+            for deal in await self.top_deals(destination=watch.destination):
                 if deal.price_value <= watch.budget_ceiling:
                     triggered.append((watch, deal))
                     break

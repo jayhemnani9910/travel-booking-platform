@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import List, Dict, Any
 import os
 
+
+def _int(value, default: int) -> int:
+    """int() that falls back to default on empty cells (pandas reads them as NaN)."""
+    return default if pd.isna(value) else int(value)
+
+
 class CSVIngestionService:
     """Handles ingestion of real datasets from CSV files."""
     
@@ -57,10 +63,10 @@ class CSVIngestionService:
                             'deal_price': float(row['price_clean']),
                             'discount_percentage': float(row['discount_pct']),
                             'room_type': row.get('room_type', 'Entire home/apt'),
-                            'accommodates': int(row.get('accommodates', 2)),
-                            'availability': int(row.get('availability_365', 30)),
+                            'accommodates': _int(row.get('accommodates'), 2),
+                            'availability': _int(row.get('availability_365'), 30),
                             'rating': float(row.get('review_scores_rating', 4.5)) / 20 if 'review_scores_rating' in df.columns else 4.5,
-                            'reviews_count': int(row.get('number_of_reviews', 10)),
+                            'reviews_count': _int(row.get('number_of_reviews'), 10),
                             'ingested_at': datetime.now().isoformat()
                         })
             
@@ -108,8 +114,8 @@ class CSVIngestionService:
                         'original_price': float(baseline),
                         'deal_price': float(row['price']),
                         'discount_percentage': float(discount),
-                        'duration_hours': int(row.get('duration', 4)),
-                        'stops': int(row.get('stops', 0)),
+                        'duration_hours': _int(row.get('duration'), 4),
+                        'stops': _int(row.get('stops'), 0),
                         'flight_class': row.get('class', 'Economy'),
                         'departure_time': (datetime.now() + timedelta(days=np.random.randint(7, 60))).isoformat(),
                         'ingested_at': datetime.now().isoformat()
@@ -160,9 +166,9 @@ class CSVIngestionService:
                         'original_price': float(baseline),
                         'deal_price': float(row['adr']),
                         'discount_percentage': float(discount),
-                        'nights': int(row.get('stays_in_week_nights', 2) + row.get('stays_in_weekend_nights', 1)),
-                        'adults': int(row.get('adults', 2)),
-                        'children': int(row.get('children', 0)),
+                        'nights': _int(row.get('stays_in_week_nights'), 2) + _int(row.get('stays_in_weekend_nights'), 1),
+                        'adults': _int(row.get('adults'), 2),
+                        'children': _int(row.get('children'), 0),
                         'meal': row.get('meal', 'BB'),
                         'is_repeated_guest': bool(row.get('is_repeated_guest', 0)),
                         'ingested_at': datetime.now().isoformat()

@@ -61,7 +61,8 @@ export class FlightDealConsumer {
          valid_until = VALUES(valid_until)`,
         [
           event.deal_id,
-          event.reference_id,
+          // reference_id is optional; mysql2 rejects undefined binds
+          event.reference_id ?? null,
           event.price.original,
           event.price.deal,
           event.price.discount,
@@ -86,7 +87,7 @@ export class FlightDealConsumer {
       // Pre-warm search cache for popular routes
       const [flightRows] = await this.db.execute(
         'SELECT origin_airport_code, destination_airport_code FROM flights WHERE id = ?',
-        [event.reference_id]
+        [event.reference_id ?? null]
       );
       
       if ((flightRows as any[]).length > 0) {
@@ -94,7 +95,7 @@ export class FlightDealConsumer {
         const searchKey = `hot_deals:${flight.origin_airport_code}:${flight.destination_airport_code}`;
         
         // Add to hot deals list
-        await this.redis.lpush(searchKey, JSON.stringify({
+        await this.redis.lPush(searchKey, JSON.stringify({
           flightId: event.reference_id,
           dealId: event.deal_id,
           price: event.price,

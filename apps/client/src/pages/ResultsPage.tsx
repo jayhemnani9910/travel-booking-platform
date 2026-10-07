@@ -15,20 +15,19 @@ export function ResultsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [sortBy, setSortBy] = useState('recommended');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const resultsPerPage = 10;
-  const [filters, setFilters] = useState({
+  const emptyFilters = {
     priceRange: [0, 1000],
     maxPrice: '',
     directOnly: false,
     starRating: [] as number[],
     amenities: [] as string[],
-    neighborhood: [] as string[],
     carType: [] as string[],
     transmission: [] as string[],
     departureTime: '',
     arrivalTime: ''
-  });
+  };
+  const [filters, setFilters] = useState(emptyFilters);
   const displayTypeName = type ? `${type.charAt(0).toUpperCase()}${type.slice(1)}` : 'Travel';
   const typeLabel = type ?? 'options';
 
@@ -43,6 +42,10 @@ export function ResultsPage() {
       }
     }
   }, [type, searchParams]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
 
   const toggleFavorite = (id: string) => {
     setFavorites(prev => {
@@ -83,8 +86,9 @@ export function ResultsPage() {
     }
   };
 
-  const search = async () => {
+  const search = async (activeFilters = filters) => {
     setLoading(true);
+    setCurrentPage(1);
     try {
       const params = Object.fromEntries(searchParams.entries());
       
@@ -96,12 +100,10 @@ export function ResultsPage() {
           departureDate: params.departureDate,
           returnDate: params.returnDate,
           passengers: Number(params.passengers) || 1,
-          maxPrice: filters.maxPrice ? Number(filters.maxPrice) : undefined,
-          directOnly: filters.directOnly
+          maxPrice: activeFilters.maxPrice ? Number(activeFilters.maxPrice) : undefined,
+          directOnly: activeFilters.directOnly
         });
-        const flights = response.data.data.flights || [];
-        setResults(flights);
-        setTotalPages(Math.ceil(flights.length / resultsPerPage));
+        setResults(response.data.data.flights || []);
       } else if (type === 'hotels') {
         response = await hotelsApi.searchHotels({
           destination: params.destination || params.location,
@@ -109,37 +111,68 @@ export function ResultsPage() {
           checkOut: params.checkOut || params.returnDate,
           guests: Number(params.guests) || 1,
           rooms: Number(params.rooms) || 1,
-          maxPrice: filters.maxPrice ? Number(filters.maxPrice) : undefined,
-          minStarRating: filters.starRating.length > 0 ? Math.min(...filters.starRating) : undefined
+          maxPrice: activeFilters.maxPrice ? Number(activeFilters.maxPrice) : undefined,
+          minStarRating: activeFilters.starRating.length > 0 ? Math.min(...activeFilters.starRating) : undefined
         });
-        const hotels = response.data.data.hotels || [];
-        setResults(hotels);
-        setTotalPages(Math.ceil(hotels.length / resultsPerPage));
+        setResults(response.data.data.hotels || []);
       } else if (type === 'cars') {
         response = await carsApi.searchCars({
           location: params.location || params.destination,
           pickupDate: params.pickupDate || params.departureDate,
           returnDate: params.returnDate,
-          maxPrice: filters.maxPrice ? Number(filters.maxPrice) : undefined
+          maxPrice: activeFilters.maxPrice ? Number(activeFilters.maxPrice) : undefined
         });
-        const cars = response.data.data.cars || [];
-        setResults(cars);
-        setTotalPages(Math.ceil(cars.length / resultsPerPage));
+        setResults(response.data.data.cars || []);
       }
     } catch (error) {
       console.error('Search error:', error);
       setResults([]);
-      setTotalPages(1);
     } finally {
       setLoading(false);
     }
   };
 
+  const timeBuckets: Record<string, [number, number]> = {
+    morning: [6, 12],
+    afternoon: [12, 18],
+    evening: [18, 24],
+    night: [0, 6]
+  };
+
+  const inTimeBucket = (value: string | undefined, bucket: string) => {
+    if (!bucket) return true;
+    const hour = value ? new Date(value).getHours() : NaN;
+    const [from, to] = timeBuckets[bucket];
+    return hour >= from && hour < to;
+  };
+
+  const matchesAny = (value: string | undefined, selected: string[]) =>
+    selected.length === 0 || selected.some(s => s.toLowerCase() === (value || '').toLowerCase());
+
+  // These filters are not supported by the search APIs, so they run on the loaded results
+  const applyClientFilters = (data: any[]) => data.filter(item => {
+    if (type === 'flights') {
+      return inTimeBucket(item.departureTime, filters.departureTime) &&
+        inTimeBucket(item.arrivalTime, filters.arrivalTime);
+    }
+    if (type === 'hotels') {
+      const amenities: string[] = (item.amenities || []).map((a: string) => a.toLowerCase());
+      return filters.amenities.every(a => amenities.includes(a.toLowerCase()));
+    }
+    if (type === 'cars') {
+      return matchesAny(item.vehicleType || item.carType || item.category, filters.carType) &&
+        matchesAny(item.transmission, filters.transmission);
+    }
+    return true;
+  });
+
+  const visibleResults = sortResults(applyClientFilters(results));
+  const totalPages = Math.ceil(visibleResults.length / resultsPerPage);
+
   const getPaginatedResults = () => {
-    const sorted = sortResults(results);
     const start = (currentPage - 1) * resultsPerPage;
     const end = start + resultsPerPage;
-    return sorted.slice(start, end);
+    return visibleResults.slice(start, end);
   };
 
   const renderFlight = (flight: any) => {
@@ -206,10 +239,11 @@ export function ResultsPage() {
   };
 
   const renderHotel = (hotel: any) => {
-    const isFavorite = favorites.has(hotel._id);
+    const hotelId = hotel.id || hotel._id;
+    const isFavorite = favorites.has(hotelId);
     return (
       <div
-        key={hotel._id}
+        key={hotelId}
         className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all overflow-hidden border border-gray-200"
       >
         <div className="flex flex-col md:flex-row">
@@ -248,7 +282,7 @@ export function ResultsPage() {
             </p>
             <div className="flex justify-between items-center pt-4 border-t border-gray-100">
               <button
-                onClick={() => toggleFavorite(hotel._id)}
+                onClick={() => toggleFavorite(hotelId)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
                   isFavorite ? 'text-red-500 bg-red-50' : 'text-gray-500 hover:bg-gray-50'
                 }`}
@@ -258,7 +292,7 @@ export function ResultsPage() {
               </button>
               <Button
                 onClick={() =>
-                  navigate(`/hotels/${hotel._id}`, {
+                  navigate(`/hotels/${hotelId}`, {
                     state: {
                       item: hotel,
                       type: 'hotel',
@@ -350,7 +384,7 @@ export function ResultsPage() {
               {displayTypeName} Results
             </h1>
             <p className="text-gray-600">
-              {loading ? 'Searching...' : `${results.length} ${typeLabel} found`}
+              {loading ? 'Searching...' : `${visibleResults.length} ${typeLabel} found`}
             </p>
           </div>
           <Button variant="ghost" onClick={() => navigate('/')}>
@@ -500,36 +534,6 @@ export function ResultsPage() {
                         ))}
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Neighborhood
-                      </label>
-                      <div className="space-y-2">
-                        {['Downtown', 'Airport', 'Beach', 'Business District', 'Historic Center'].map(area => (
-                          <label key={area} className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={filters.neighborhood.includes(area)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setFilters({
-                                    ...filters,
-                                    neighborhood: [...filters.neighborhood, area]
-                                  });
-                                } else {
-                                  setFilters({
-                                    ...filters,
-                                    neighborhood: filters.neighborhood.filter(n => n !== area)
-                                  });
-                                }
-                              }}
-                              className="rounded border-gray-300 text-brand focus:ring-brand"
-                            />
-                            <span className="text-sm text-gray-700">{area}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
                   </>
                 )}
 
@@ -599,26 +603,15 @@ export function ResultsPage() {
                 )}
 
                 <div className="space-y-2">
-                  <Button variant="secondary" fullWidth onClick={search}>
+                  <Button variant="secondary" fullWidth onClick={() => search()}>
                     Apply Filters
                   </Button>
                   <Button 
                     variant="ghost" 
                     fullWidth 
                     onClick={() => {
-                      setFilters({
-                        priceRange: [0, 1000],
-                        maxPrice: '',
-                        directOnly: false,
-                        starRating: [],
-                        amenities: [],
-                        neighborhood: [],
-                        carType: [],
-                        transmission: [],
-                        departureTime: '',
-                        arrivalTime: ''
-                      });
-                      search();
+                      setFilters(emptyFilters);
+                      search(emptyFilters);
                     }}
                   >
                     Clear All Filters
@@ -675,7 +668,7 @@ export function ResultsPage() {
                   <SkeletonCard key={i} />
                 ))}
               </div>
-            ) : results.length === 0 ? (
+            ) : visibleResults.length === 0 ? (
               <div className="bg-white rounded-lg shadow-sm p-12 text-center">
                 <p className="text-gray-500 text-lg">No results found. Try adjusting your filters.</p>
               </div>

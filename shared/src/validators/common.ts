@@ -123,13 +123,6 @@ export function validateAddress(address: Address): void {
 }
 
 /**
- * Generate trace ID for request tracing
- */
-export function generateTraceId(): string {
-  return `trace_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-/**
  * Generate idempotency key
  */
 export function generateIdempotencyKey(): string {

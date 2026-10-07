@@ -6,7 +6,7 @@ import {
   Search, Filter, Calendar, Download, CheckCircle, XCircle, Clock, AlertCircle
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Input, Pagination, useToast, Modal } from '../components/ui';
-import { adminApi } from '../services/api';
+import { adminApi, userApi } from '../services/api';
 
 import { useAuth } from '../contexts/AuthContext';
 
@@ -18,8 +18,22 @@ const AdminDashboard: React.FC = () => {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
   }
 
-  if (!user || user.role !== 'admin') {
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (user.role !== 'admin') {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] bg-gray-50 flex items-center justify-center px-4">
+        <Card className="max-w-md w-full">
+          <CardContent className="text-center py-12">
+            <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Admins only</h2>
+            <p className="text-gray-600">You are signed in as {user.email}, which is not an admin account.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -152,7 +166,7 @@ const Overview: React.FC = () => {
                 </p>
                 <p className="text-sm text-green-600 mt-2 flex items-center">
                   <TrendingUp className="w-4 h-4 mr-1" />
-                  +12.5% from last month
+                  +12.5% from last month (sample data)
                 </p>
               </div>
               <div className="p-3 bg-blue-100 rounded-lg">
@@ -172,7 +186,7 @@ const Overview: React.FC = () => {
                 </p>
                 <p className="text-sm text-green-600 mt-2 flex items-center">
                   <TrendingUp className="w-4 h-4 mr-1" />
-                  +8.3% from last month
+                  +8.3% from last month (sample data)
                 </p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
@@ -192,7 +206,7 @@ const Overview: React.FC = () => {
                 </p>
                 <p className="text-sm text-green-600 mt-2 flex items-center">
                   <TrendingUp className="w-4 h-4 mr-1" />
-                  +15.7% from last month
+                  +15.7% from last month (sample data)
                 </p>
               </div>
               <div className="p-3 bg-purple-100 rounded-lg">
@@ -227,7 +241,9 @@ const Overview: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Revenue Trend</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Revenue Trend <Badge variant="warning" size="sm">Sample data</Badge>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -245,7 +261,9 @@ const Overview: React.FC = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Bookings by Type</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Bookings by Type <Badge variant="warning" size="sm">Sample data</Badge>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -283,7 +301,8 @@ const UsersManagement: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const response = await adminApi.getUsers({ limit: 100 });
-      setUsers(response.data.data?.users || []);
+      const data = response.data.data;
+      setUsers(Array.isArray(data) ? data : data?.users || []);
     } catch (error) {
       console.error('Failed to fetch users:', error);
     } finally {
@@ -302,15 +321,27 @@ const UsersManagement: React.FC = () => {
   };
 
   const handleSaveUser = async () => {
-    // Simulate API call
-    showToast('success', 'User updated successfully');
-    setIsEditModalOpen(false);
+    try {
+      const { firstName, lastName, email } = selectedUser;
+      const response = await userApi.updateUser(selectedUser.id, { firstName, lastName, email });
+      const updated = response.data.data?.user || selectedUser;
+      setUsers(prev => prev.map(u => (u.id === selectedUser.id ? { ...u, ...updated } : u)));
+      showToast('success', 'User updated successfully');
+      setIsEditModalOpen(false);
+    } catch (error: any) {
+      showToast('error', error.response?.data?.error?.message || 'Failed to update user');
+    }
   };
 
   const handleDeleteUser = async (userId: string) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
-      showToast('success', 'User deleted successfully');
-      setUsers(users.filter(u => u.id !== userId));
+      try {
+        await userApi.deleteUser(userId);
+        setUsers(prev => prev.filter(u => u.id !== userId));
+        showToast('success', 'User deleted successfully');
+      } catch (error: any) {
+        showToast('error', error.response?.data?.error?.message || 'Failed to delete user');
+      }
     }
   };
 
@@ -340,7 +371,10 @@ const UsersManagement: React.FC = () => {
             <Input
               placeholder="Search users..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               icon={<Search className="w-5 h-5" />}
             />
           </div>
@@ -448,17 +482,6 @@ const UsersManagement: React.FC = () => {
                 defaultValue={selectedUser.email}
                 onChange={(e) => setSelectedUser({...selectedUser, email: e.target.value})}
               />
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-gray-700">Role</label>
-                <select 
-                  className="border border-gray-300 rounded-md p-2"
-                  defaultValue={selectedUser.role}
-                  onChange={(e) => setSelectedUser({...selectedUser, role: e.target.value})}
-                >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
@@ -474,6 +497,7 @@ const UsersManagement: React.FC = () => {
 const BookingsManagement: React.FC = () => {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const bookingsPerPage = 10;
@@ -485,16 +509,12 @@ const BookingsManagement: React.FC = () => {
   const fetchBookings = async () => {
     try {
       const response = await adminApi.getBookings({ limit: 100 });
-      setBookings(response.data.data?.bookings || []);
+      // admin-svc returns the rows array directly
+      const data = response.data.data;
+      setBookings(Array.isArray(data) ? data : data?.bookings || []);
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
-      // Mock data for fallback
-      setBookings([
-        { id: 'BK-12345', type: 'flight', user: 'John Doe', amount: 450.00, status: 'confirmed', date: '2025-11-20' },
-        { id: 'BK-67890', type: 'hotel', user: 'Jane Smith', amount: 1200.00, status: 'pending', date: '2025-12-01' },
-        { id: 'BK-11223', type: 'car', user: 'Bob Johnson', amount: 85.50, status: 'completed', date: '2025-10-15' },
-        { id: 'BK-44556', type: 'flight', user: 'Alice Brown', amount: 620.00, status: 'cancelled', date: '2025-11-25' },
-      ]);
+      setLoadError('Could not load bookings. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -525,7 +545,7 @@ const BookingsManagement: React.FC = () => {
 
   const filteredBookings = bookings.filter(booking =>
     booking.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    booking.user?.toLowerCase().includes(searchTerm.toLowerCase())
+    String(booking.userId ?? '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const totalPages = Math.ceil(filteredBookings.length / bookingsPerPage);
@@ -551,7 +571,10 @@ const BookingsManagement: React.FC = () => {
             <Input
               placeholder="Search bookings by ID or User..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               icon={<Search className="w-5 h-5" />}
             />
           </div>
@@ -574,6 +597,10 @@ const BookingsManagement: React.FC = () => {
                   <tr>
                     <td colSpan={7} className="px-6 py-4 text-center text-gray-500">Loading...</td>
                   </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-4 text-center text-red-600">{loadError}</td>
+                  </tr>
                 ) : paginatedBookings.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-4 text-center text-gray-500">No bookings found</td>
@@ -588,13 +615,13 @@ const BookingsManagement: React.FC = () => {
                         {booking.type}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                        {booking.user}
+                        {booking.userId}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                        {new Date(booking.date).toLocaleDateString()}
+                        {booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap font-medium">
-                        ${booking.amount.toFixed(2)}
+                        ${Number(booking.totalAmount || 0).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(booking.status)}
@@ -667,6 +694,10 @@ const Analytics: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg px-4 py-3 text-sm">
+        Sample data: the charts and tables on this tab use fixed example numbers, not live analytics.
+      </div>
+
       {/* Revenue by Year */}
       <Card>
         <CardHeader>

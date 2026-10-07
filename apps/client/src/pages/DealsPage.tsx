@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plane, Hotel, Car, TrendingDown, Clock, Bell, Tag, Filter } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, useToast } from '../components/ui';
 import { useDeals, useWebSocket, useAuth } from '../hooks';
@@ -22,6 +23,7 @@ const DealsPage: React.FC = () => {
   const { isConnected, lastMessage } = useWebSocket();
   const { showToast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   const [filter, setFilter] = useState<'all' | 'flight' | 'hotel' | 'car'>('all');
   const [sortBy, setSortBy] = useState<'discount' | 'expiry' | 'price'>('discount');
@@ -34,9 +36,13 @@ const DealsPage: React.FC = () => {
   useEffect(() => {
     // Update deals in real-time from WebSocket
     if (lastMessage && lastMessage.type === 'deal_alert') {
-      const newDeal = lastMessage.data;
-      setLiveDeals(prev => [newDeal, ...prev]);
-      showToast('info', `New deal alert: ${newDeal.title}`);
+      const alert = lastMessage.data || {};
+      // Price-watch alerts share this message type but are not deals; only list real deal payloads
+      const isDeal = alert.id && typeof alert.discountedPrice === 'number' && typeof alert.originalPrice === 'number';
+      if (isDeal) {
+        setLiveDeals(prev => [alert as Deal, ...prev]);
+      }
+      showToast('info', `New deal alert: ${alert.title || alert.message || 'check your deals'}`);
     }
   }, [lastMessage, showToast]);
 
@@ -91,6 +97,13 @@ const DealsPage: React.FC = () => {
     } else {
       showToast('error', result.error || 'Failed to create price watch');
     }
+  };
+
+  // Deals do not carry a bookable listing id, so start the search for that destination
+  const handleBookNow = (deal: Deal) => {
+    const params = new URLSearchParams({ type: `${deal.type}s` });
+    if (deal.destination) params.set('destination', deal.destination);
+    navigate(`/search?${params}`);
   };
 
   const filteredDeals = liveDeals.filter(deal => 
@@ -263,7 +276,7 @@ const DealsPage: React.FC = () => {
                       <Button
                         fullWidth
                         size="sm"
-                      onClick={() => handlePriceWatch(deal)}
+                        onClick={() => handleBookNow(deal)}
                       >
                         Book Now
                       </Button>

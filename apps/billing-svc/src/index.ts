@@ -49,7 +49,10 @@ function mapStripeStatus(stripeStatus: string): string {
     'processing': 'processing',
     'requires_capture': 'processing',
     'canceled': 'failed',
-    'succeeded': 'succeeded'
+    'succeeded': 'succeeded',
+    // Internal statuses passed straight through by updatePaymentStatus
+    'failed': 'failed',
+    'refunded': 'refunded'
   };
 
   return statusMap[stripeStatus] || 'pending';
@@ -93,6 +96,7 @@ class BillingService {
     this.redis = createClient({
       url: process.env.REDIS_URL || 'redis://localhost:6379'
     });
+    this.redis.on('error', (err: any) => console.error('Redis Client Error', err));
     await this.redis.connect();
     console.log('✅ Redis connected');
   }
@@ -477,7 +481,8 @@ class BillingService {
 
       // Create refund with Stripe
       const refund = await this.stripe.refunds.create({
-        payment_intent: payment.stripePaymentIntentId,
+        // getPaymentById returns the raw snake_case row
+        payment_intent: (payment as any).stripe_payment_intent_id,
         reason: reason as any
       });
 
@@ -568,7 +573,8 @@ class BillingService {
         LIMIT ? OFFSET ?
       `;
 
-      params.push(Number(limit), offset);
+      // MySQL 8.0.22+ rejects numeric (DOUBLE) LIMIT/OFFSET binds from execute()
+      params.push(String(Number(limit)), String(offset));
 
       const [rows] = await this.db.execute(sql, params);
 
@@ -603,7 +609,8 @@ class BillingService {
           webhookSecret
         );
       } else {
-        event = req.body as any;
+        // Body is a raw Buffer here (express.raw on this route)
+        event = JSON.parse(req.body.toString());
       }
     } catch (err: any) {
       console.error('Webhook signature verification failed:', err.message);

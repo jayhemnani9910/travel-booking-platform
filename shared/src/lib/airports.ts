@@ -18,7 +18,7 @@ const normalize = (value: string) => value.trim().toLowerCase();
 const AIRPORT_CODE_REGEX = /^[A-Za-z]{3}$/;
 
 export const formatAirportLabel = (airport: AirportMetadata) =>
-  `${airport.city}, ${airport.state} (${airport.iata}) · ${airport.name}`;
+  `${airport.city}${airport.state ? `, ${airport.state}` : ''} (${airport.iata}) · ${airport.name}`;
 
 export function isLikelyAirportCode(value?: string | null): value is string {
   if (!value) return false;
@@ -151,7 +151,7 @@ export function resolveAirportQuery(query: string, options?: ResolveAirportOptio
       input: query
     }));
 
-  return dedupeAirports([...baseMatches, ...metroMatches]).slice(0, baseMaxResults + metroMatches.length);
+  return dedupeAirports([...baseMatches, ...metroMatches]).slice(0, baseMaxResults);
 }
 
 export function getNearbyAirportCodes(code: string): string[] {

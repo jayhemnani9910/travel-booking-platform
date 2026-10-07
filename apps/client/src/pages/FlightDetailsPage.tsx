@@ -65,6 +65,9 @@ export function FlightDetailsPage() {
     );
   }
 
+  // flights-svc returns origin/destination as airport objects; demo data uses plain codes
+  const originCode = typeof flight.origin === 'object' ? flight.origin?.code : flight.origin;
+  const destinationCode = typeof flight.destination === 'object' ? flight.destination?.code : flight.destination;
   const isDirect = !flight.stops || flight.stops === 0 || flight.stops === 'Direct';
 
   return (
@@ -89,7 +92,7 @@ export function FlightDetailsPage() {
                   {flight.airline} {flight.flightNumber}
                 </CardTitle>
                 <p className="text-gray-600 mt-1">
-                  {flight.origin} → {flight.destination}
+                  {originCode} → {destinationCode}
                 </p>
               </div>
               <div className="text-right">
@@ -107,7 +110,7 @@ export function FlightDetailsPage() {
                   <span className="text-sm font-medium text-gray-700">Departure</span>
                 </div>
                 <p className="text-lg font-semibold">{flight.departureTime}</p>
-                <p className="text-sm text-gray-600">{flight.origin}</p>
+                <p className="text-sm text-gray-600">{originCode}</p>
               </div>
 
               {/* Duration */}
@@ -131,7 +134,7 @@ export function FlightDetailsPage() {
                   <span className="text-sm font-medium text-gray-700">Arrival</span>
                 </div>
                 <p className="text-lg font-semibold">{flight.arrivalTime}</p>
-                <p className="text-sm text-gray-600">{flight.destination}</p>
+                <p className="text-sm text-gray-600">{destinationCode}</p>
               </div>
             </div>
           </CardContent>

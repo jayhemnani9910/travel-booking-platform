@@ -9,7 +9,7 @@
 
 **Full-stack microservices platform for travel booking — flights, hotels, cars, deals, and billing.**
 
-14 independently deployable services communicating over Kafka, backed by MongoDB and MySQL, orchestrated with Kubernetes, and fronted by a React/Vite client with i18n support.
+14 independently deployable services communicating over Kafka, backed by MongoDB and MySQL, orchestrated with Kubernetes manifests (infra/k8s/), and fronted by a React/Vite client with i18n support.
 
 ---
 
@@ -59,7 +59,7 @@
 | `user-svc` | TypeScript | User auth and profiles |
 | `notification-svc` | TypeScript | Email/push notifications |
 | `admin-svc` | TypeScript | Analytics dashboard (bookings, revenue, deals, users) |
-| `deals-worker` | TypeScript | Background deal aggregation |
+| `deals-worker` | Python | Background deal aggregation |
 | `airport-resolver-svc` | TypeScript | Airport code/name resolution |
 | `external-adapters` | TypeScript | Third-party API integrations |
 | `concierge-svc` | Python | AI-powered travel assistant |
@@ -73,8 +73,8 @@
 |-----------|-----------|
 | Container orchestration | Kubernetes (manifests in `infra/k8s/`) |
 | Message broker | Apache Kafka |
-| Primary database | MongoDB |
-| Relational database | MySQL |
+| Primary database | MySQL (users, inventory, bookings, payments) |
+| Analytics store | MongoDB (admin analytics, concierge cache) |
 | Reverse proxy | Nginx |
 | CI/CD | GitHub Actions (CI + CD + Pages) |
 | Containerization | Docker (per-service Dockerfiles) |

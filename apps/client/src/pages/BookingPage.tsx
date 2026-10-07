@@ -6,7 +6,7 @@ import {
   useStripe,
   useElements
 } from '@stripe/react-stripe-js';
-import api, { bookingApi } from '../services/api';
+import { bookingApi } from '../services/api';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks';
 
@@ -16,9 +16,9 @@ const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
 interface BookingData {
   type: 'flight' | 'hotel' | 'car';
   item: any;
-  total: number;
-  taxes: number;
-  finalTotal: number;
+  unitPrice: number;
+  // Nights (hotel) or days (car); 1 for flights. booking-svc charges (price + extras) x this.
+  units: number;
   startDate?: string | null;
   endDate?: string | null;
 }
@@ -96,8 +96,9 @@ function PaymentForm({
     return extrasTotal;
   };
 
-  const extrasTotal = calculateExtrasTotal();
-  const totalWithExtras = bookingData.finalTotal + extrasTotal;
+  const extrasPerUnit = calculateExtrasTotal();
+  const extrasTotal = extrasPerUnit * bookingData.units;
+  const totalWithExtras = (bookingData.unitPrice + extrasPerUnit) * bookingData.units;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +125,7 @@ function PaymentForm({
               type: bookingData.type,
               referenceId: bookingData.item.id,
               quantity: 1,
-              unitPrice: totalWithExtras,
+              unitPrice: bookingData.unitPrice + extrasPerUnit,
               startDate: bookingData.startDate,
               endDate: bookingData.endDate,
               extras: extras
@@ -200,7 +201,7 @@ function PaymentForm({
           onSuccess({
             paymentIntent: {
               id: `payment_${Date.now()}`,
-              amount: bookingData.finalTotal,
+              amount: totalWithExtras,
               status: 'succeeded',
               customer: passengerInfo
             },
@@ -210,73 +211,6 @@ function PaymentForm({
       }
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Payment processing failed');
-      setProcessing(false);
-    }
-  };
-
-  const handleSubmitOriginal = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!stripe || !elements) {
-      return;
-    }
-
-    setProcessing(true);
-    setError(null);
-
-    const cardElement = elements.getElement(CardElement);
-
-    if (!cardElement) {
-      setError('Card element not found');
-      setProcessing(false);
-      return;
-    }
-
-    // Validate passenger info
-    if (!passengerInfo.firstName || !passengerInfo.lastName || !passengerInfo.email) {
-      setError('Please fill in all required passenger information');
-      setProcessing(false);
-      return;
-    }
-
-    try {
-      // Create payment intent
-      const { data } = await api.post('/api/billing/create-payment-intent', {
-        amount: bookingData.finalTotal,
-        currency: 'usd',
-        bookingId: `booking_${Date.now()}`,
-        userId: 'user_123' // This should come from auth context
-      });
-
-      // Confirm payment with Stripe
-      const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
-        data.data.clientSecret,
-        {
-          payment_method: {
-            card: cardElement,
-            billing_details: {
-              name: `${passengerInfo.firstName} ${passengerInfo.lastName}`,
-              email: passengerInfo.email,
-              phone: passengerInfo.phone
-            }
-          }
-        }
-      );
-
-      if (stripeError) {
-        setError(stripeError.message || 'Payment failed');
-        setProcessing(false);
-        return;
-      }
-
-      if (paymentIntent.status === 'succeeded') {
-        // Legacy path: we don't have a persisted booking here, so only pass the paymentIntent.
-        onSuccess({ paymentIntent, booking: null });
-      } else {
-        setProcessing(false);
-      }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during payment');
       setProcessing(false);
     }
   };
@@ -549,7 +483,7 @@ function PaymentForm({
                   onChange={(e) => setExtras({ ...extras, lateCheckout: e.target.checked })}
                 />
                 <label htmlFor="late-checkout" className="ml-2 text-sm text-gray-700">
-                  Late Checkout (+$30)
+                  Late Checkout (+$30/night)
                 </label>
               </div>
             </div>
@@ -654,7 +588,7 @@ function PaymentForm({
         disabled={!stripe || processing}
         className="btn-primary w-full"
       >
-        {processing ? 'Processing...' : `Pay $${bookingData.finalTotal.toFixed(2)}`}
+        {processing ? 'Processing...' : `Pay $${totalWithExtras.toFixed(2)}`}
       </button>
     </form>
   );
@@ -697,15 +631,17 @@ export function BookingPage() {
       basePrice = selected.dailyRate || selected.daily_rate || 0;
     }
 
-    const taxes = Math.round(basePrice * 0.12 * 100) / 100; // simple 12% tax for display
-    const finalTotal = basePrice + taxes;
+    let units = 1;
+    if (logicalType !== 'flight' && stateStartDate && stateEndDate) {
+      const days = Math.ceil((new Date(stateEndDate).getTime() - new Date(stateStartDate).getTime()) / (1000 * 60 * 60 * 24));
+      if (Number.isFinite(days) && days > 0) units = days;
+    }
 
     setBookingData({
       type: logicalType,
       item: { id: selected.id },
-      total: basePrice,
-      taxes,
-      finalTotal,
+      unitPrice: basePrice,
+      units,
       startDate: stateStartDate || null,
       endDate: stateEndDate || null
     });
@@ -797,16 +733,15 @@ export function BookingPage() {
               <h2 className="text-xl font-semibold mb-4">Booking Summary</h2>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>${bookingData.total.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Taxes & Fees:</span>
-                  <span>${bookingData.taxes.toFixed(2)}</span>
+                  <span>Price:</span>
+                  <span>
+                    ${bookingData.unitPrice.toFixed(2)}
+                    {bookingData.type !== 'flight' && ` x ${bookingData.units} ${bookingData.type === 'hotel' ? 'night' : 'day'}${bookingData.units === 1 ? '' : 's'}`}
+                  </span>
                 </div>
                 <div className="border-t pt-3 flex justify-between font-semibold">
-                  <span>Base Total:</span>
-                  <span>${bookingData.finalTotal.toFixed(2)}</span>
+                  <span>Total before extras:</span>
+                  <span>${(bookingData.unitPrice * bookingData.units).toFixed(2)}</span>
                 </div>
               </div>
               <div className="mt-6 p-4 bg-blue-50 rounded-lg">

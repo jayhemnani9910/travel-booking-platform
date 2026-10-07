@@ -36,7 +36,7 @@ jobs:
       - name: Build client (GitHub Pages)
         working-directory: apps/client
         env:
-          BASE_PATH: "/JH_data236_project/"
+          BASE_PATH: "/travel-booking-platform/"
           VITE_DEMO_MODE: "true"
           VITE_ROUTER_MODE: "hash"
         run: npm run build

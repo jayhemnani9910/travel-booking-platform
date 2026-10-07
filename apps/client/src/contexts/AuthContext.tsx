@@ -6,6 +6,7 @@ export interface User {
     firstName: string;
     lastName: string;
     phone?: string;
+    address?: { street?: string; city?: string; state?: string; zipCode?: string; country?: string };
     role: 'user' | 'admin';
 }
 
@@ -68,8 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const storedToken = localStorage.getItem('accessToken');
         const storedUser = localStorage.getItem('user');
         if (storedToken && storedUser) {
-            setToken(storedToken);
-            setUser(JSON.parse(storedUser));
+            try {
+                setUser(JSON.parse(storedUser));
+                setToken(storedToken);
+            } catch {
+                localStorage.removeItem('user');
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+            }
         }
         setLoading(false);
     }, []);
