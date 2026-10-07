@@ -60,7 +60,8 @@ export class CarDealConsumer {
          valid_until = VALUES(valid_until)`,
         [
           event.deal_id,
-          event.reference_id,
+          // reference_id is optional; mysql2 rejects undefined binds
+          event.reference_id ?? null,
           event.price.original,
           event.price.deal,
           event.price.discount,
@@ -85,7 +86,7 @@ export class CarDealConsumer {
       // Pre-warm search cache for location
       const [carRows] = await this.db.execute(
         'SELECT location_code FROM car_rentals WHERE id = ?',
-        [event.reference_id]
+        [event.reference_id ?? null]
       );
       
       if ((carRows as any[]).length > 0) {
@@ -93,7 +94,7 @@ export class CarDealConsumer {
         const searchKey = `hot_deals:cars:${car.location_code}`;
         
         // Add to hot deals list
-        await this.redis.lpush(searchKey, JSON.stringify({
+        await this.redis.lPush(searchKey, JSON.stringify({
           carId: event.reference_id,
           dealId: event.deal_id,
           price: event.price,

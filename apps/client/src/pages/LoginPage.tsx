@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Input, Button, Card } from '../components/ui';
 
 export function LoginPage() {
     const navigate = useNavigate();
-    const { login } = useAuth();
+    const { login, isAuthenticated } = useAuth();
+    const location = useLocation() as any;
+    const [searchParams] = useSearchParams();
+    // Send the user back where they came from (?redirect= or the state.from set by guarded pages)
+    const requested = searchParams.get('redirect') || location.state?.from?.pathname;
+    const redirectTo = requested && requested.startsWith('/') && !requested.startsWith('//') ? requested : '/';
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -29,14 +34,22 @@ export function LoginPage() {
                 throw new Error(data.error?.message || 'Login failed');
             }
 
-            login(data.data.accessToken, data.data.user);
-            navigate('/');
+            const { accessToken, refreshToken, user } = data.data || {};
+            if (!accessToken || !user) {
+                throw new Error('Login failed: unexpected response from server');
+            }
+            login(accessToken, user, refreshToken);
+            navigate(redirectTo, { replace: true });
         } catch (err: any) {
             setError(err.message);
         } finally {
             setLoading(false);
         }
     };
+
+    if (isAuthenticated) {
+        return <Navigate to={redirectTo} replace />;
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">

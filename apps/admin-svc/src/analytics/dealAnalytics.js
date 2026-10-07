@@ -191,7 +191,7 @@ class DealAnalytics {
       }
     ]).toArray();
 
-    const views = clickThroughRates.find(item => item._id === 'deal_view') || { count: 1 };
+    const views = clickThroughRates.find(item => item._id === 'deal_view') || { count: 0 };
     const clicks = clickThroughRates.find(item => item._id === 'deal_click') || { count: 0 };
     const bookings = clickThroughRates.find(item => item._id === 'deal_booking') || { count: 0 };
 

@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { app } = require('./apps/user-svc/dist/index');
+const { app } = require('../apps/user-svc/dist/index');
 
 async function testUserService() {
   try {

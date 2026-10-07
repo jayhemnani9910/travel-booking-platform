@@ -3,6 +3,7 @@ import { User, Mail, Phone, MapPin, CreditCard, Settings, Package, Heart, Save }
 import { Card, CardHeader, CardTitle, CardContent, Tabs, Badge, Button, Input, useToast } from '../components/ui';
 import { useAuth, useBookings } from '../hooks';
 import { useNavigate } from 'react-router-dom';
+import { userApi } from '../services/api';
 
 const ProfilePage: React.FC = () => {
   const { user, updateProfile, logout, loading: authLoading } = useAuth();
@@ -15,10 +16,10 @@ const ProfilePage: React.FC = () => {
     lastName: user?.lastName || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    address: '',
-    city: '',
-    state: '',
-    zip: ''
+    address: user?.address?.street || '',
+    city: user?.address?.city || '',
+    state: user?.address?.state || '',
+    zip: user?.address?.zipCode || ''
   });
 
   useEffect(() => {
@@ -28,10 +29,10 @@ const ProfilePage: React.FC = () => {
         lastName: user.lastName || '',
         email: user.email || '',
         phone: user.phone || '',
-        address: '',
-        city: '',
-        state: '',
-        zip: ''
+        address: user.address?.street || '',
+        city: user.address?.city || '',
+        state: user.address?.state || '',
+        zip: user.address?.zipCode || ''
       });
     }
   }, [user]);
@@ -64,11 +65,10 @@ const ProfilePage: React.FC = () => {
   };
 
   const handleDeleteAccount = async () => {
+    if (!user) return;
     if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
       try {
-        // In a real app: await api.delete('/api/users/me');
-        // Simulating API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await userApi.deleteUser(user.id);
         showToast('success', 'Account deleted successfully');
         logout();
         navigate('/');

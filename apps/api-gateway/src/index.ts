@@ -346,7 +346,7 @@ class ApiGateway {
     const path = req.path;
     const method = req.method.toUpperCase();
 
-    if (path === '/health' || path === '/' || path.startsWith('/docs') || path.startsWith('/ws')) {
+    if (path === '/health' || path === '/metrics' || path === '/' || path.startsWith('/docs') || path.startsWith('/ws')) {
       return true;
     }
 
@@ -378,9 +378,9 @@ class ApiGateway {
     this.app.get('/health', this.healthCheck.bind(this));
     
     // Prometheus metrics endpoint
-    this.app.get('/metrics', (req, res) => {
+    this.app.get('/metrics', async (req, res) => {
       res.set('Content-Type', register.contentType);
-      res.end(register.metrics());
+      res.end(await register.metrics());
     });
 
     // WebSocket proxy to concierge /events

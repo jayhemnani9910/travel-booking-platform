@@ -195,11 +195,16 @@ export class CarsService {
       // Normalize back into searchParams so the rest of the logic can use it
       (searchParams as any).pickupLocation = pickupLocation;
       
-      const cacheKey = `cars_search:${JSON.stringify(searchParams)}`;
+      const page = Math.max(Math.floor(Number(req.query.page)) || 1, 1);
+      const limit = Math.min(Math.max(Math.floor(Number(req.query.limit)) || 20, 1), 100);
+      const offset = (page - 1) * limit;
+
+      // page/limit come from the query string, even for POST
+      const cacheKey = `cars_search:${JSON.stringify(searchParams)}:${page}:${limit}`;
       if (this.redis && (this.redis as any).isReady) {
         const cached = await this.redis.get(cacheKey);
         if (cached) {
-          return res.json(JSON.parse(cached));
+          return res.json({ success: true, data: JSON.parse(cached) });
         }
       }
 
@@ -221,14 +226,12 @@ export class CarsService {
         params.push(searchParams.transmission);
       }
 
-      if (searchParams.carType && searchParams.carType.length > 0) {
-        whereClause += ` AND vehicle_type IN (${searchParams.carType.map(() => '?').join(',')})`;
-        params.push(...searchParams.carType);
+      // A single GET ?carType=X arrives as a string, not an array
+      const carType = ([] as string[]).concat(searchParams.carType ?? []);
+      if (carType.length > 0) {
+        whereClause += ` AND vehicle_type IN (${carType.map(() => '?').join(',')})`;
+        params.push(...carType);
       }
-
-      const page = Number(req.query.page) || 1;
-      const limit = Math.min(Number(req.query.limit) || 20, 100);
-      const offset = (page - 1) * limit;
 
       const sql = `
         SELECT * FROM car_rentals
@@ -334,7 +337,7 @@ export class CarsService {
       dailyRate: car.daily_rate,
       currency: car.currency,
       available: car.available,
-      images: car.images ? JSON.parse(car.images) : [],
+      images: car.images ? (Array.isArray(car.images) ? car.images : JSON.parse(car.images)) : [],
       policies: {
         minimumAge: car.minimum_age,
         mileagePolicy: car.mileage_policy,
@@ -405,8 +408,9 @@ export class CarsService {
 
   private startReservationCleanupJob() {
     setInterval(async () => {
+      let conn: mysql.PoolConnection | undefined;
       try {
-        const conn = await this.db.getConnection();
+        conn = await this.db.getConnection();
         await conn.beginTransaction();
 
         const [expired] = await conn.execute(`
@@ -416,10 +420,12 @@ export class CarsService {
         `);
 
         for (const res of expired as any[]) {
-          await conn.execute(
-            'UPDATE car_reservations SET status = ? WHERE id = ?',
+          // Re-check status so a concurrent confirm/cancel (or another replica) cannot release twice
+          const [result] = await conn.execute(
+            "UPDATE car_reservations SET status = ? WHERE id = ? AND status = 'pending'",
             ['expired', res.id]
           );
+          if ((result as any).affectedRows !== 1) continue;
           await conn.execute(
             'UPDATE car_rentals SET available = 1 WHERE id = ?',
             [res.car_id]
@@ -427,13 +433,15 @@ export class CarsService {
         }
 
         await conn.commit();
-        conn.release();
 
         if ((expired as any[]).length > 0) {
           console.log(`[CLEANUP] Expired ${(expired as any[]).length} car reservations`);
         }
       } catch (error) {
+        if (conn) await conn.rollback().catch(() => {});
         console.error('[CLEANUP] Reservation cleanup error:', error);
+      } finally {
+        conn?.release();
       }
     }, 60000);
   }

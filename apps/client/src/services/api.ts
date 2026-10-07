@@ -15,6 +15,7 @@ export const userApi = {
   getUser: (id: string) => api.get(`/api/users/${id}`),
   createUser: (data: any) => api.post('/api/users', data),
   updateUser: (id: string, data: any) => api.put(`/api/users/${id}`, data),
+  deleteUser: (id: string) => api.delete(`/api/users/${id}`),
   searchUsers: (params: any) => api.get('/api/users', { params }),
 };
 
@@ -83,7 +84,8 @@ export const adminApi = {
 
 // Airport API
 export const airportsApi = {
-  suggest: (query: string, limit?: number) => api.get('/api/airports/suggest', { params: { q: query, limit } }),
+  suggest: (query: string, limit?: number, signal?: AbortSignal) =>
+    api.get('/api/airports/suggest', { params: { q: query, limit }, signal }),
   resolve: (query: string) => api.get('/api/airports/resolve', { params: { q: query } }),
   getAirport: (code: string) => api.get(`/api/airports/${code}`),
   getNearby: (code: string) => api.get(`/api/airports/${code}/nearby`),

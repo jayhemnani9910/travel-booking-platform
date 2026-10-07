@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useRef } from 'react';
+import { useAuth } from './AuthContext';
 type SocketLike = WebSocket;
 
 const isDemoMode = (import.meta.env.VITE_DEMO_MODE as string | undefined)?.toLowerCase() === 'true';
@@ -24,7 +25,9 @@ export function SocketProvider({ children }: SocketProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
   const reconnectAttempts = useRef(0);
+  const { token: authToken } = useAuth();
 
+  // Re-runs on login/logout so the socket carries the current token
   useEffect(() => {
     // Demo-mode: skip WS entirely (GitHub Pages has no backend).
     if (isDemoMode) {
@@ -82,8 +85,9 @@ export function SocketProvider({ children }: SocketProviderProps) {
       };
 
       ws.onclose = () => {
-        setIsConnected(false);
+        // A socket closed by cleanup must not flip the state of its replacement
         if (active) {
+          setIsConnected(false);
           scheduleReconnect();
         }
       };
@@ -120,6 +124,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
 
     return () => {
       active = false;
+      setIsConnected(false);
       if (retryTimer) {
         clearTimeout(retryTimer);
       }
@@ -127,7 +132,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
         ws.close();
       }
     };
-  }, []);
+  }, [authToken]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected, lastMessage }}>

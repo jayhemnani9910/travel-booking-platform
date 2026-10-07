@@ -312,6 +312,13 @@ class BookingService {
       console.error('[SAGA] Missing bookingId in payment_succeeded event', event);
       return;
     }
+    // A failed or cancelled booking no longer holds its reservations; do not revive it
+    const [statusRows] = await this.db.execute('SELECT status FROM bookings WHERE id = ?', [bookingId]);
+    const currentStatus = (statusRows as any[])[0]?.status;
+    if (currentStatus !== 'awaiting_payment') {
+      console.warn(`[SAGA] Ignoring payment_succeeded for booking ${bookingId} in status ${currentStatus}`);
+      return;
+    }
     console.log(`[SAGA] Payment succeeded for booking ${bookingId}. Confirming reservations.`);
 
     // Fetch all booking items to confirm underlying reservations
@@ -350,11 +357,14 @@ class BookingService {
       await this.db.execute('UPDATE bookings SET status = ? WHERE id = ?', ['failed', bookingId]);
     } else {
       const confirmationNumber = `KAYAK-${bookingId.slice(0, 8).toUpperCase()}`;
-      await this.db.execute('UPDATE bookings SET status = ?, confirmation_number = ? WHERE id = ?', [
-        'confirmed',
-        confirmationNumber,
-        bookingId,
-      ]);
+      const [updateResult] = await this.db.execute(
+        "UPDATE bookings SET status = ?, confirmation_number = ? WHERE id = ? AND status = 'awaiting_payment'",
+        ['confirmed', confirmationNumber, bookingId]
+      );
+      if ((updateResult as any).affectedRows !== 1) {
+        console.warn(`[SAGA] Booking ${bookingId} left awaiting_payment before confirmation; not confirming.`);
+        return;
+      }
       console.log(`[SAGA] Booking ${bookingId} fully confirmed.`);
 
       // Emit booking-confirmation event for notification service
@@ -390,15 +400,20 @@ class BookingService {
     }
   }
 
-  private async handlePaymentFailed(event: { bookingId: string }) {
-    const { bookingId } = event;
+  private async handlePaymentFailed(event: any) {
+    // billing-svc emits booking_id
+    const bookingId = event.bookingId || event.booking_id;
+    if (!bookingId) {
+      console.error('[SAGA] Missing bookingId in payment_failed event', event);
+      return;
+    }
     console.log(`[SAGA] Payment failed for booking ${bookingId}. Starting compensation.`);
 
     const [items] = await this.db.execute('SELECT * FROM booking_items WHERE booking_id = ?', [bookingId]);
 
     for (const item of (items as any[])) {
       try {
-        const details = JSON.parse(item.details);
+        const details = typeof item.details === 'string' ? JSON.parse(item.details) : item.details;
         if (item.type === 'flight') {
           await this.flightService.compensate(details.reservationId);
         } else if (item.type === 'hotel') {

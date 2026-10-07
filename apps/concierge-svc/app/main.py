@@ -36,6 +36,8 @@ async def lifespan(app: FastAPI):
     redis_client: Redis | None = None
     try:
         redis_client = await redis_from_url(settings.redis_url, decode_responses=False)
+        # from_url does not connect, so ping to find out if Redis is really up
+        await redis_client.ping()
     except Exception:
         redis_client = None
 

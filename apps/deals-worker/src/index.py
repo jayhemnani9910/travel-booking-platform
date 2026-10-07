@@ -139,24 +139,24 @@ class DealsWorker:
             """, (offset,))
             flights = await cursor.fetchall()
         
-        for flight in flights:
-            # Simulate price variations (deals)
-            if np.random.random() < 0.3:  # 30% chance of being a deal
-                original_price = float(flight['price'])  # Convert Decimal to float
-                deal_price = original_price * (0.7 + np.random.random() * 0.25)  # 25-70% discount
+            for flight in flights:
+                # Simulate price variations (deals)
+                if np.random.random() < 0.3:  # 30% chance of being a deal
+                    original_price = float(flight['price'])  # Convert Decimal to float
+                    deal_price = original_price * (0.7 + np.random.random() * 0.25)  # 25-70% discount
                 
-                deals.append({
-                    'type': 'flight',
-                    'reference_id': flight['id'],
-                    'airline': flight['airline'],
-                    'route': f"{flight['origin_airport_code']}-{flight['destination_airport_code']}",
-                    'departure_time': flight['departure_time'],
-                    'original_price': float(original_price),
-                    'deal_price': round(deal_price, 2),
-                    'currency': flight['currency'],
-                    'source': 'airline_feed',
-                    'raw_data': flight
-                })
+                    deals.append({
+                        'type': 'flight',
+                        'reference_id': flight['id'],
+                        'airline': flight['airline'],
+                        'route': f"{flight['origin_airport_code']}-{flight['destination_airport_code']}",
+                        'departure_time': flight['departure_time'],
+                        'original_price': float(original_price),
+                        'deal_price': round(deal_price, 2),
+                        'currency': flight['currency'],
+                        'source': 'airline_feed',
+                        'raw_data': flight
+                    })
         
             # Fetch sample hotels
             
@@ -213,9 +213,11 @@ class DealsWorker:
             
             # Normalize dates
             if 'departure_time' in deal:
-                deal['valid_until'] = (datetime.fromisoformat(
-                    deal['departure_time'].replace('Z', '+00:00')
-                ) - timedelta(days=1)).isoformat()
+                # DB flights carry a datetime (DATETIME column), CSV ones an ISO string
+                departure = deal['departure_time']
+                if not isinstance(departure, datetime):
+                    departure = datetime.fromisoformat(departure.replace('Z', '+00:00'))
+                deal['valid_until'] = (departure - timedelta(days=1)).isoformat()
             else:
                 deal['valid_until'] = (datetime.now() + timedelta(days=7)).isoformat()
             
@@ -272,10 +274,11 @@ class DealsWorker:
             
         # Availability factor (20% weight)
         if deal['type'] == 'flight':
-            raw_data = deal['raw_data']
-            if raw_data['available_seats'] > 50:
+            # CSV and simulated flights have no raw_data
+            available_seats = (deal.get('raw_data') or {}).get('available_seats', 0)
+            if available_seats > 50:
                 score += 15
-            elif raw_data['available_seats'] > 20:
+            elif available_seats > 20:
                 score += 10
             else:
                 score += 5
@@ -330,7 +333,7 @@ class DealsWorker:
             conditions = []
             if deal['type'] == 'flight':
                 conditions.append('non-refundable')
-                if deal['raw_data']['changeable']:
+                if (deal.get('raw_data') or {}).get('changeable'):
                     conditions.append('changeable with fee')
                     
             deal['conditions'] = conditions
@@ -352,7 +355,7 @@ class DealsWorker:
                 'originalPrice': deal['original_price'],
                 'dealPrice': deal['deal_price'],
                 'discountPercentage': deal['discount_percentage'],
-                'currency': deal['currency'],
+                'currency': deal.get('currency', 'USD'),
                 'validUntil': deal['valid_until'],
                 'conditions': deal['conditions'],
                 'tags': deal['tags'],
@@ -411,7 +414,7 @@ class DealsWorker:
 
             event = {
                 'event_type': 'deal_created',
-                'deal_id': f"deal_{deal['reference_id']}_{int(datetime.now().timestamp())}",
+                'deal_id': f"deal_{deal['type']}_{deal['reference_id']}",
                 'type': deal['type'],
                 'destination': destination or 'Unknown',
                 'route': route,
@@ -429,10 +432,8 @@ class DealsWorker:
             }
             
             try:
-                await self.kafka_producer.send_and_wait(
-                    'deal.events', 
-                    json.dumps(event, default=str).encode('utf-8')
-                )
+                # value_serializer already JSON-encodes the event
+                await self.kafka_producer.send_and_wait('deal.events', event)
                 print(f"📤 Published: {event['event_type']} - {event['type']} - Score: {event['score']}")
             except Exception as e:
                 print(f"⚠️  Failed to publish event: {e}")

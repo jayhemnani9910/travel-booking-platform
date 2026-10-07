@@ -7,7 +7,6 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, HashRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
-import { SocketProvider } from './contexts/SocketContext';
 import App from './App';
 import RootErrorBoundary from './components/RootErrorBoundary';
 import './index.css';
@@ -45,21 +44,19 @@ const root = createRoot(container);
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <SocketProvider>
-        {useHashRouter ? (
-          <HashRouter>
-            <RootErrorBoundary>
-              <App />
-            </RootErrorBoundary>
-          </HashRouter>
-        ) : (
-          <BrowserRouter basename={baseName === '/' ? undefined : baseName}>
-            <RootErrorBoundary>
-              <App />
-            </RootErrorBoundary>
-          </BrowserRouter>
-        )}
-      </SocketProvider>
+      {useHashRouter ? (
+        <HashRouter>
+          <RootErrorBoundary>
+            <App />
+          </RootErrorBoundary>
+        </HashRouter>
+      ) : (
+        <BrowserRouter basename={baseName === '/' ? undefined : baseName}>
+          <RootErrorBoundary>
+            <App />
+          </RootErrorBoundary>
+        </BrowserRouter>
+      )}
     </QueryClientProvider>
   </React.StrictMode>
 );

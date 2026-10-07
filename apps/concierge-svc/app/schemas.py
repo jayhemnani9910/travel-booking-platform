@@ -67,7 +67,7 @@ class BundlePreferences(BaseModel):
 class BundleConstraints(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    adults: int = Field(ge=1)
+    adults: int = Field(default=1, ge=1)
     children: int = Field(default=0, ge=0)
     rooms: int = Field(default=1, ge=1)
 
