@@ -21,8 +21,8 @@
     "build:services": "for dir in apps/*/; do cd \"$dir\" && npm run build && cd -; done",
     "test": "jest --passWithNoTests",
     "test:unit": "jest --testPathPatterns=__tests__",
-    "test:integration": "jest --testPathPatterns=integration",
-    "test:e2e": "jest --testPathPatterns=e2e",
+    "test:integration": "jest --testPathPatterns='apps/(booking|billing|flights|user)-svc/src/__tests__'",
+    "test:e2e": "jest --testPathPatterns=e2e --testPathIgnorePatterns=/node_modules/ /dist/",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "seed": "cd tests && npm run seed",
@@ -33,6 +33,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@types/papaparse": "^5.3.8",
@@ -41,6 +43,7 @@
     "dotenv": "^16.0.0",
     "eslint": "^8.0.0",
     "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.5.2",
     "papaparse": "^5.4.1",
     "prettier": "^3.0.0",
     "supertest": "^7.1.4",

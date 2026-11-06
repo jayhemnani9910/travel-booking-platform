@@ -483,7 +483,8 @@ export class FlightsService {
   private buildPriceRange(flights: any[]) {
     if (flights.length === 0) return { min: 0, max: 0, avg: 0 };
 
-    const prices = flights.map(f => f.price);
+    // mysql2 returns DECIMAL columns as strings
+    const prices = flights.map(f => Number(f.price));
     return {
       min: Math.min(...prices),
       max: Math.max(...prices),

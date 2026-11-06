@@ -1,4 +1,19 @@
 // User Service Integration Tests
+const request = require('supertest');
+const { validateEmail } = require('../../shared/src/validators/common');
+const { UserService } = require('../../apps/user-svc/src/index');
+
+// A real UserService whose database pool is replaced by a stub
+const serviceWithDatabase = (db) => {
+  const service = new UserService();
+  service.db = db;
+  return service;
+};
+
+const closeService = async (service) => {
+  if (service.redis && service.redis.isOpen) await service.redis.quit();
+};
+
 describe('User Service Integration Tests', () => {
   let mockUserService;
   let mockDatabase;
@@ -71,20 +86,30 @@ describe('User Service Integration Tests', () => {
     });
 
     it('should reject registration with duplicate email', async () => {
-      mockDatabase.query.mockResolvedValue([[{ id: 'existing-user' }]]); // Simulate existing user
-      
+      mockDatabase.execute.mockResolvedValue([[{ id: '123-45-6789' }]]); // Simulate existing user
+      const service = serviceWithDatabase(mockDatabase);
+
       const userData = {
         email: 'existing@example.com',
         password: 'SecurePassword123!',
         firstName: 'Jane',
-        lastName: 'Doe'
+        lastName: 'Doe',
+        ssn: '123-45-6789'
       };
 
-      // Should detect duplicate email
-      expect(mockDatabase.query).toHaveBeenCalledWith(
-        'SELECT * FROM users WHERE email = ?',
-        [userData.email]
-      );
+      try {
+        const response = await request(service.app).post('/auth/register').send(userData);
+
+        // Should detect duplicate email
+        expect(response.status).toBe(409);
+        expect(response.body.error.code).toBe('CONFLICT');
+        expect(mockDatabase.execute).toHaveBeenCalledWith(
+          'SELECT * FROM users WHERE email = ?',
+          [userData.email]
+        );
+      } finally {
+        await closeService(service);
+      }
     });
 
     it('should validate password strength', () => {
@@ -248,11 +273,11 @@ describe('User Service Integration Tests', () => {
       const invalidEmails = ['invalid-email', '@domain.com', 'user@'];
       
       validEmails.forEach(email => {
-        expect(email.includes('@') && email.includes('.')).toBe(true);
+        expect(() => validateEmail(email)).not.toThrow();
       });
       
       invalidEmails.forEach(email => {
-        expect(!(email.includes('@') && email.includes('.'))).toBe(true);
+        expect(() => validateEmail(email)).toThrow('Invalid email format');
       });
     });
 
@@ -269,9 +294,17 @@ describe('User Service Integration Tests', () => {
     it('should handle database connection errors', async () => {
       const error = new Error('Connection refused');
       mockDatabase.execute.mockRejectedValue(error);
+      const service = serviceWithDatabase(mockDatabase);
 
-      await expect(mockUserService.getUserById('user-123'))
-        .rejects.toThrow('Connection refused');
+      try {
+        const response = await request(service.app).get('/users/123-45-6789');
+
+        expect(response.status).toBe(500);
+        expect(response.body.error.code).toBe('INTERNAL_ERROR');
+        expect(response.body.error.message).toBe('Connection refused');
+      } finally {
+        await closeService(service);
+      }
     });
 
     it('should handle Redis connection errors', async () => {

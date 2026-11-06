@@ -58,8 +58,8 @@ function mapStripeStatus(stripeStatus: string): string {
   return statusMap[stripeStatus] || 'pending';
 }
 
-class BillingService {
-  private app: express.Application;
+export class BillingService {
+  public app: express.Application;
   private db!: mysql.Pool;
   private stripe!: Stripe;
   private kafka!: Kafka;
@@ -179,7 +179,7 @@ class BillingService {
     this.app.get('/billing/payments', this.getPayments.bind(this));
   }
 
-  private async createPaymentIntent(req: Request, res: Response) {
+  private async createPaymentIntent(req: Request, res: Response): Promise<Response> {
     const idempotencyKey = req.headers['x-idempotency-key'] as string | undefined;
     const traceId = (req as any).traceId;
 
@@ -263,6 +263,18 @@ class BillingService {
           error: {
             code: 'BAD_REQUEST',
             message: 'Amount, userId, and bookingId are required'
+          },
+          traceId
+        });
+      }
+
+      if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+        await conn.rollback();
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Amount must be a positive number'
           },
           traceId
         });
@@ -569,7 +581,7 @@ class BillingService {
       const sql = `
         SELECT * FROM payments
         ${whereClause}
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ? OFFSET ?
       `;
 
@@ -815,14 +827,16 @@ class BillingService {
   }
 }
 
-// Start the service
-const billingService = new BillingService();
-(async () => {
-  try {
-    await billingService.init();
-    billingService.start();
-  } catch (error) {
-    console.error('❌ Billing Service failed to start', error);
-    process.exit(1);
-  }
-})();
+// Start the service only if executed directly
+if (require.main === module) {
+  const billingService = new BillingService();
+  (async () => {
+    try {
+      await billingService.init();
+      billingService.start();
+    } catch (error) {
+      console.error('❌ Billing Service failed to start', error);
+      process.exit(1);
+    }
+  })();
+}

@@ -1,0 +1,15 @@
+# Extra settings for the end-to-end tests (tests/e2e) in CI:
+# a local mail catcher so notification-svc can really send email.
+services:
+  mailpit:
+    image: axllent/mailpit:v1.21
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "8025:8025"
+
+  notification-svc:
+    environment:
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025

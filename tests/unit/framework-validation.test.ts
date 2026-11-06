@@ -29,7 +29,7 @@ describe('Test Framework Validation', () => {
       insert: jest.fn().mockResolvedValue({ affectedRows: 1 })
     };
     
-    return mockDatabase.query('SELECT * FROM users').then(data => {
+    return mockDatabase.query('SELECT * FROM users').then((data: any) => {
       expect(data).toEqual([{ id: 1, name: 'test' }]);
     });
   });
@@ -84,7 +84,7 @@ describe('Test Framework Validation', () => {
       amount: 10000,
       currency: 'usd',
       metadata: { bookingId: 'booking-123' }
-    }).then(paymentIntent => {
+    }).then((paymentIntent: any) => {
       expect(paymentIntent.id).toBe('pi_123');
       expect(paymentIntent.client_secret).toMatch(/_secret_/);
     });
@@ -102,7 +102,7 @@ describe('Test Framework Validation', () => {
           id: 'booking-123',
           confirmationNumber: 'CF-123456789-abc123',
           status: 'pending',
-          totalAmount: bookingData.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0),
+          totalAmount: bookingData.items.reduce((sum: number, item: any) => sum + (item.totalPrice || 0), 0),
           createdAt: new Date().toISOString()
         };
       }),
@@ -132,7 +132,7 @@ describe('Test Framework Validation', () => {
     expect(booking).toHaveProperty('confirmationNumber');
     expect(booking.totalAmount).toBe(599.98);
     
-    return mockBookingService.getBooking(booking.id).then(bookingDetails => {
+    return mockBookingService.getBooking(booking.id).then((bookingDetails: any) => {
       expect(bookingDetails.id).toBe(booking.id);
     });
   });

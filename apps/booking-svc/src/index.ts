@@ -223,8 +223,8 @@ const createCarServiceClient = (baseURL: string) => ({
   }
 });
 
-class BookingService {
-  private app: express.Application;
+export class BookingService {
+  public app: express.Application;
   private db!: mysql.Pool;
   private kafka!: Kafka;
   private kafkaProducer: any;
@@ -448,13 +448,18 @@ class BookingService {
       const [existing] = await this.db.execute('SELECT response FROM idempotency_keys WHERE `key` = ?', [idempotencyKey]);
       if ((existing as any[]).length > 0) {
         console.log(`[SAGA] Idempotency hit for key ${idempotencyKey}`);
-        return res.status(200).json(JSON.parse((existing as any)[0].response));
+        // mysql2 returns JSON columns already parsed
+        const stored = (existing as any)[0].response;
+        return res.status(200).json(typeof stored === 'string' ? JSON.parse(stored) : stored);
       }
     }
 
     const payload: CreateBookingRequest = req.body;
     if (!payload?.userId || !Array.isArray(payload.items) || payload.items.length === 0) {
       return res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'userId and items are required' } });
+    }
+    if (payload.items.some(item => !['flight', 'hotel', 'car'].includes(item?.type))) {
+      return res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'item type must be flight, hotel or car' } });
     }
 
     // Validate userId is in SSN format per spec
@@ -487,89 +492,90 @@ class BookingService {
     let tripStartDate: string | null = null;
     let tripEndDate: string | null = null;
 
-    for (const item of payload.items) {
-      const canonical = await this.fetchCanonicalPricing(item);
-      const itemCurrency = (canonical.currency || payload.currency || 'USD').toUpperCase();
-      if (!bookingCurrency) {
-        bookingCurrency = itemCurrency;
-      } else if (bookingCurrency !== itemCurrency) {
-        throw new Error('Mixed-currency bookings are not supported');
-      }
-
-      const sanitizedExtras = this.normalizeExtras(item.type, item.extras ?? item.details?.extras ?? {});
-      const extrasCharge = this.calculateExtrasCharge(item.type, sanitizedExtras);
-      const multiplier = this.getItemMultiplier(item);
-      if (multiplier <= 0) {
-        throw new Error('Invalid passenger count or trip duration');
-      }
-
-      let reservation: any;
-      if (item.type === 'flight') {
-        reservation = await this.flightService.reserve(item.referenceId, bookingId, multiplier);
-        compensations.push(() => this.flightService.compensate(reservation.reservationId));
-      } else if (item.type === 'hotel') {
-        reservation = await this.hotelService.reserve(item.referenceId, bookingId);
-        compensations.push(() => this.hotelService.compensate(reservation.reservationId));
-      } else if (item.type === 'car') {
-        reservation = await this.carService.reserve(item.referenceId, bookingId);
-        compensations.push(() => this.carService.compensate(reservation.reservationId));
-      }
-
-      if (!reservation || !reservation.reservationId) {
-        throw new Error(`Failed to reserve ${item.type} ${item.referenceId}`);
-      }
-
-      const unitPrice = Number(canonical.unitPrice) + extrasCharge;
-      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-        throw new Error('Calculated unit price invalid');
-      }
-
-      const totalPrice = unitPrice * multiplier;
-      if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
-        throw new Error('Calculated booking item total invalid');
-      }
-      totalAmount += totalPrice;
-
-      const itemStartDate = item.startDate || null;
-      const itemEndDate = item.endDate || item.startDate || null;
-      if (itemStartDate) {
-        if (!tripStartDate || itemStartDate < tripStartDate) {
-          tripStartDate = itemStartDate;
-        }
-      }
-      if (itemEndDate) {
-        if (!tripEndDate || itemEndDate > tripEndDate) {
-          tripEndDate = itemEndDate;
-        }
-      }
-
-      preparedItems.push({
-        id: uuidv4(),
-        type: item.type,
-        referenceId: item.referenceId,
-        quantity: multiplier,
-        unitPrice,
-        totalPrice,
-        startDate: itemStartDate,
-        endDate: itemEndDate,
-        reservationId: reservation.reservationId,
-        extras: sanitizedExtras,
-        extrasCharge,
-        baseUnitPrice: Number(canonical.unitPrice),
-        metadata: canonical.metadata || {}
-      });
-      console.log(`[SAGA] Reserved ${item.type} ${item.referenceId} for booking ${bookingId}`);
-    }
-
-    if (totalAmount <= 0) {
-      throw new Error('Calculated booking total invalid');
-    }
-
-    bookingCurrency = (bookingCurrency || payload.currency || 'USD').toUpperCase();
-
-    const conn = await this.db.getConnection();
+    let conn: mysql.PoolConnection | undefined;
     let transactionStarted = false;
     try {
+      for (const item of payload.items) {
+        const canonical = await this.fetchCanonicalPricing(item);
+        const itemCurrency = (canonical.currency || payload.currency || 'USD').toUpperCase();
+        if (!bookingCurrency) {
+          bookingCurrency = itemCurrency;
+        } else if (bookingCurrency !== itemCurrency) {
+          throw new Error('Mixed-currency bookings are not supported');
+        }
+
+        const sanitizedExtras = this.normalizeExtras(item.type, item.extras ?? item.details?.extras ?? {});
+        const extrasCharge = this.calculateExtrasCharge(item.type, sanitizedExtras);
+        const multiplier = this.getItemMultiplier(item);
+        if (multiplier <= 0) {
+          throw new Error('Invalid passenger count or trip duration');
+        }
+
+        let reservation: any;
+        if (item.type === 'flight') {
+          reservation = await this.flightService.reserve(item.referenceId, bookingId, multiplier);
+          compensations.push(() => this.flightService.compensate(reservation.reservationId));
+        } else if (item.type === 'hotel') {
+          reservation = await this.hotelService.reserve(item.referenceId, bookingId);
+          compensations.push(() => this.hotelService.compensate(reservation.reservationId));
+        } else if (item.type === 'car') {
+          reservation = await this.carService.reserve(item.referenceId, bookingId);
+          compensations.push(() => this.carService.compensate(reservation.reservationId));
+        }
+
+        if (!reservation || !reservation.reservationId) {
+          throw new Error(`Failed to reserve ${item.type} ${item.referenceId}`);
+        }
+
+        const unitPrice = Number(canonical.unitPrice) + extrasCharge;
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+          throw new Error('Calculated unit price invalid');
+        }
+
+        const totalPrice = unitPrice * multiplier;
+        if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
+          throw new Error('Calculated booking item total invalid');
+        }
+        totalAmount += totalPrice;
+
+        const itemStartDate = item.startDate || null;
+        const itemEndDate = item.endDate || item.startDate || null;
+        if (itemStartDate) {
+          if (!tripStartDate || itemStartDate < tripStartDate) {
+            tripStartDate = itemStartDate;
+          }
+        }
+        if (itemEndDate) {
+          if (!tripEndDate || itemEndDate > tripEndDate) {
+            tripEndDate = itemEndDate;
+          }
+        }
+
+        preparedItems.push({
+          id: uuidv4(),
+          type: item.type,
+          referenceId: item.referenceId,
+          quantity: multiplier,
+          unitPrice,
+          totalPrice,
+          startDate: itemStartDate,
+          endDate: itemEndDate,
+          reservationId: reservation.reservationId,
+          extras: sanitizedExtras,
+          extrasCharge,
+          baseUnitPrice: Number(canonical.unitPrice),
+          metadata: canonical.metadata || {}
+        });
+        console.log(`[SAGA] Reserved ${item.type} ${item.referenceId} for booking ${bookingId}`);
+      }
+
+      if (totalAmount <= 0) {
+        throw new Error('Calculated booking total invalid');
+      }
+
+      bookingCurrency = (bookingCurrency || payload.currency || 'USD').toUpperCase();
+
+      conn = await this.db.getConnection();
       await conn.beginTransaction();
       transactionStarted = true;
       await conn.execute(
@@ -680,7 +686,7 @@ class BookingService {
       console.error(`[SAGA] Error in booking ${bookingId}: ${error.message}`);
 
       // If transaction was started but not committed, rollback
-      if (transactionStarted) {
+      if (transactionStarted && conn) {
         try {
           await conn.rollback();
           console.log('[SAGA] Transaction rolled back');
@@ -727,39 +733,71 @@ class BookingService {
   }
 
   private async getBooking(req: Request, res: Response) {
-    const { id } = req.params;
-    const [rows] = await this.db.execute('SELECT * FROM bookings WHERE id = ?', [id]);
-    const booking = (rows as any[])[0];
-    if (!booking) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Booking not found' } });
-    const [items] = await this.db.execute('SELECT * FROM booking_items WHERE booking_id = ?', [id]);
-    return res.json({ success: true, data: { ...booking, items }, traceId: (req as any).traceId } as ApiResponse);
+    try {
+      const { id } = req.params;
+      const [rows] = await this.db.execute('SELECT * FROM bookings WHERE id = ?', [id]);
+      const booking = (rows as any[])[0];
+      if (!booking) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Booking not found' } });
+      const [items] = await this.db.execute('SELECT * FROM booking_items WHERE booking_id = ?', [id]);
+      return res.json({ success: true, data: { ...booking, items }, traceId: (req as any).traceId } as ApiResponse);
+    } catch (error: any) {
+      console.error('Get booking error:', error);
+      return res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: error.message }, traceId: (req as any).traceId });
+    }
   }
 
   private async getUserBookings(req: Request, res: Response) {
-    const { userId } = req.params;
-    const [rows] = await this.db.execute(
-      'SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',
-      [userId]
-    );
+    try {
+      const { userId } = req.params;
+      const [rows] = await this.db.execute(
+        'SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',
+        [userId]
+      );
 
-    const bookings = (rows as any[]).map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      type: row.type,
-      status: row.status,
-      totalAmount: parseFloat(row.total_amount),
-      currency: row.currency,
-      confirmationNumber: row.confirmation_number,
-      createdAt: row.created_at,
-      tripStartDate: row.trip_start_date || null,
-      tripEndDate: row.trip_end_date || null,
-    }));
+      const bookingRows = rows as any[];
+      const itemsByBooking = new Map<string, any[]>();
+      if (bookingRows.length > 0) {
+        const [itemRows] = await this.db.execute(
+          `SELECT * FROM booking_items WHERE booking_id IN (${bookingRows.map(() => '?').join(',')})`,
+          bookingRows.map(row => row.id)
+        );
+        for (const item of itemRows as any[]) {
+          const list = itemsByBooking.get(item.booking_id) || [];
+          list.push({
+            id: item.id,
+            type: item.type,
+            referenceId: item.reference_id,
+            quantity: item.quantity,
+            unitPrice: parseFloat(item.unit_price),
+            totalPrice: parseFloat(item.total_price)
+          });
+          itemsByBooking.set(item.booking_id, list);
+        }
+      }
 
-    return res.json({
-      success: true,
-      data: bookings,
-      traceId: (req as any).traceId
-    } as ApiResponse);
+      const bookings = bookingRows.map(row => ({
+        id: row.id,
+        userId: row.user_id,
+        type: row.type,
+        status: row.status,
+        totalAmount: parseFloat(row.total_amount),
+        currency: row.currency,
+        confirmationNumber: row.confirmation_number,
+        createdAt: row.created_at,
+        tripStartDate: row.trip_start_date || null,
+        tripEndDate: row.trip_end_date || null,
+        items: itemsByBooking.get(row.id) || [],
+      }));
+
+      return res.json({
+        success: true,
+        data: bookings,
+        traceId: (req as any).traceId
+      } as ApiResponse);
+    } catch (error: any) {
+      console.error('Get user bookings error:', error);
+      return res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: error.message }, traceId: (req as any).traceId });
+    }
   }
 
   private async cancelBooking(req: Request, res: Response) {
@@ -941,5 +979,8 @@ class BookingService {
   }
 }
 
-const svc = new BookingService();
-svc.start();
+// Start the service only if executed directly
+if (require.main === module) {
+  const svc = new BookingService();
+  svc.start();
+}

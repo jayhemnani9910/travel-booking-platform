@@ -27,7 +27,8 @@ USER app
 EXPOSE 8008
 
 # Health check - just verify the process is running since there's no HTTP server
+# (python:3.11-slim has no pgrep; the worker is PID 1)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD pgrep -f "python src/index.py" > /dev/null || exit 1
+  CMD grep -q "src/index.py" /proc/1/cmdline || exit 1
 
 CMD ["python", "src/index.py"]

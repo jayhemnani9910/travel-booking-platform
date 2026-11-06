@@ -12,6 +12,14 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x, 20.x]
+
+    env:
+      DB_HOST: localhost
+      DB_USER: root
+      DB_PASSWORD: testroot
+      DB_NAME: kayak_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
     
     services:
       mysql:
@@ -21,7 +29,7 @@ jobs:
           MYSQL_DATABASE: kayak_test
         ports:
           - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=10
 
       redis:
         image: redis:7-alpine
@@ -42,34 +50,25 @@ jobs:
       run: |
         npm ci
         npm run build:shared
+
+    - name: Load database schema
+      run: mysql -h 127.0.0.1 -uroot -ptestroot kayak_test < platform/mysql/schema.sql
     
 #    - name: Run linting
  #     run: npm run lint
     
     - name: Run unit tests
       run: npm run test:unit
-      env:
-        DB_HOST: localhost
-        DB_USER: root
-        DB_PASSWORD: testroot
-        DB_NAME: kayak_test
-        REDIS_URL: redis://localhost:6379
-        NODE_ENV: test
     
     - name: Run integration tests
       run: npm run test:integration
-      env:
-        DB_HOST: localhost
-        DB_USER: root
-        DB_PASSWORD: testroot
-        DB_NAME: kayak_test
-        REDIS_URL: redis://localhost:6379
-        NODE_ENV: test
     
     - name: Generate coverage report
       run: npm run test:coverage
     
     - name: Upload coverage to Codecov
+      # No Codecov token is set up; a failed upload should not fail the build
+      continue-on-error: true
       uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -103,8 +102,13 @@ jobs:
 
     - name: Test Docker images
       run: |
-        docker compose -f docker-compose.yml up -d
-        sleep 30
+        docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --wait --wait-timeout 300
         # Test health endpoints instead of non-existent test:health script
         curl -f http://localhost:8000/health || exit 1
-        docker compose -f docker-compose.yml down
+
+    - name: Run end-to-end tests
+      run: npm run test:e2e
+
+    - name: Stop Docker stack
+      if: always()
+      run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml down
