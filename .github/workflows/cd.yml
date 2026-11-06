@@ -1,8 +1,8 @@
 name: Continuous Deployment
 
+# No staging cluster is set up yet, so this runs only when started by hand.
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
