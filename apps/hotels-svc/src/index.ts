@@ -129,7 +129,7 @@ export class HotelsService {
 
       if (!reservation) throw new Error('Pending reservation not found or already processed');
 
-      await conn.execute('UPDATE hotel_reservations SET status = ?, expires_at = NULL WHERE id = ?', ['confirmed', reservationId]);
+      await conn.execute('UPDATE hotel_reservations SET status = ? WHERE id = ?', ['confirmed', reservationId]);
       await conn.commit();
 
       console.log(`[SAGA] Hotel reservation ${reservationId} confirmed`);

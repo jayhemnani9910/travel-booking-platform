@@ -177,7 +177,7 @@ class NotificationService {
         if (type === 'booking_confirmation') {
           // Create a simple notification record
           const notificationId = uuidv4();
-          const timestamp = new Date().toISOString();
+          const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' '); // MySQL TIMESTAMP format
           await this.db.execute(
             `INSERT INTO notifications (id, user_id, type, recipient, subject, content, status, created_at, sent_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -278,7 +278,7 @@ class NotificationService {
 
       console.log('Email sent:', info.messageId);
 
-      const timestamp = new Date().toISOString();
+      const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' '); // MySQL TIMESTAMP format
       await this.db.execute(
         `INSERT INTO notifications (id, user_id, type, recipient, subject, content, status, external_id, created_at, sent_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -364,7 +364,7 @@ class NotificationService {
 
       console.log('SMS sent:', twilioMessage.sid);
 
-      const timestamp = new Date().toISOString();
+      const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' '); // MySQL TIMESTAMP format
       await this.db.execute(
         `INSERT INTO notifications (id, user_id, type, recipient, subject, content, status, external_id, created_at, sent_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

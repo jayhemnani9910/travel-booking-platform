@@ -126,7 +126,7 @@ export class CarsService {
 
       if (!reservation) throw new Error('Pending reservation not found or already processed');
 
-      await conn.execute('UPDATE car_reservations SET status = ?, expires_at = NULL WHERE id = ?', ['confirmed', reservationId]);
+      await conn.execute('UPDATE car_reservations SET status = ? WHERE id = ?', ['confirmed', reservationId]);
       await conn.commit();
 
       console.log(`[SAGA] Car reservation ${reservationId} confirmed`);
