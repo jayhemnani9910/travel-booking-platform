@@ -20,7 +20,7 @@ import {
   validateAddress
 } from '@kayak/shared';
 
-class UserService {
+export class UserService {
   public app: express.Application;
   private db!: mysql.Pool;
   private redis: any;
@@ -1275,13 +1275,8 @@ class UserService {
   }
 }
 
-// Start the service
-const userService = new UserService();
-
-// Export for testing
-export const app = userService.app;
-
-// Start the service if this file is run directly
+// Start the service only if executed directly
 if (require.main === module) {
+  const userService = new UserService();
   userService.start();
 }
