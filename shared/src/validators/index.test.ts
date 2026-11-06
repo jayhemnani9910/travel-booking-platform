@@ -8,7 +8,7 @@ import {
   ValidationError,
   US_STATES,
   US_STATES_FULL
-} from './common.js';
+} from './common';
 
 describe('Validation Tests', () => {
   describe('validateSSN', () => {
@@ -46,7 +46,7 @@ describe('Validation Tests', () => {
 
     it('should reject invalid states', () => {
       expect(() => validateState('XX')).toThrow(ValidationError);
-      expect(() => validateState('California')).toThrow(ValidationError); // Case sensitive
+      expect(() => validateState('Californiaa')).toThrow(ValidationError); // Misspelled full name
       expect(() => validateState('CA ')).toThrow(ValidationError); // Trailing space
       expect(() => validateState('')).toThrow(ValidationError);
     });

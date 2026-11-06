@@ -5,6 +5,11 @@ module.exports = {
     '**/__tests__/**/*.+(ts|tsx|js)',
     '**/*.(test|spec).+(ts|tsx|js)'
   ],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+  // Source files import siblings as './x.js' (ESM style); resolve those to the .ts file
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1'
+  },
   transform: {
     '^.+\\.(ts|tsx)$': 'ts-jest'
   },
