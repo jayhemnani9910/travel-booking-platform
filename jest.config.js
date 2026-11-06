@@ -5,7 +5,8 @@ module.exports = {
     '**/__tests__/**/*.+(ts|tsx|js)',
     '**/*.(test|spec).+(ts|tsx|js)'
   ],
-  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+  // tests/e2e needs the full compose stack; run it with npm run test:e2e
+  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/tests/e2e/'],
   // Source files import siblings as './x.js' (ESM style); resolve those to the .ts file
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1'

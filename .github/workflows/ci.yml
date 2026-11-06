@@ -102,8 +102,13 @@ jobs:
 
     - name: Test Docker images
       run: |
-        docker compose -f docker-compose.yml up -d
-        sleep 30
+        docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --wait --wait-timeout 300
         # Test health endpoints instead of non-existent test:health script
         curl -f http://localhost:8000/health || exit 1
-        docker compose -f docker-compose.yml down
+
+    - name: Run end-to-end tests
+      run: npm run test:e2e
+
+    - name: Stop Docker stack
+      if: always()
+      run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml down
