@@ -3,6 +3,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { flightsApi, hotelsApi, carsApi } from '../services/api';
 import { Filter, Star, MapPin, Clock, Heart, ArrowUpDown, Grid, List, Hotel } from 'lucide-react';
 import { Button, Badge, Skeleton, SkeletonCard, Pagination, useToast } from '../components/ui';
+import { formatDuration } from '../utils/format-duration';
 
 export function ResultsPage() {
   const { type } = useParams();
@@ -198,7 +199,7 @@ export function ResultsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                <span>{flight.duration || 'N/A'}</span>
+                <span>{formatDuration(flight.duration)}</span>
               </div>
               {flight.stops === 0 && <Badge variant="success" size="sm">Direct</Badge>}
             </div>
