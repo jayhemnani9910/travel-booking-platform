@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Plane, Clock, Calendar, Users, Briefcase, ShieldCheck, AlertCircle, Check, X as XIcon } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
 import { flightsApi } from '../services/api';
+import { formatDuration } from '../utils/format-duration';
 
 export function FlightDetailsPage() {
   const { id } = useParams();
@@ -119,7 +120,7 @@ export function FlightDetailsPage() {
                   <Clock className="w-4 h-4 text-gray-400" />
                   <span className="text-sm font-medium text-gray-700">Duration</span>
                 </div>
-                <p className="text-lg font-semibold">{flight.duration}</p>
+                <p className="text-lg font-semibold">{formatDuration(flight.duration)}</p>
                 {isDirect ? (
                   <Badge variant="success" className="mt-1">Direct Flight</Badge>
                 ) : (
